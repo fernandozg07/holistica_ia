@@ -174,7 +174,7 @@ class Sessao(models.Model):
     )
 
     data = models.DateTimeField()
-    duracao = models.IntegerField(help_text="Duração em minutos")
+    duracao = models.DurationField(help_text="Duração da sessão")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='agendada')
     observacoes = models.TextField(blank=True, default='')
 
