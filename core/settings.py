@@ -1,41 +1,47 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-import dj_database_url
+import dj_database_url # Certifique-se de que 'dj_database_url' está no seu requirements.txt
+import sys # Importe sys para verificar o ambiente de teste
 
 # Define o diretório base do projeto
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Carrega variáveis de ambiente do arquivo .env
-# Isso garantirá que as variáveis do .env sejam carregadas localmente.
-# Em produção no Render, as variáveis de ambiente serão definidas diretamente lá.
-load_dotenv(os.path.join(BASE_DIR, '.env'))
+# Carrega variáveis de ambiente do arquivo .env SOMENTE se não estiver em produção no Render
+# Isso evita que o .env local sobrescreva as variáveis do Render, mas permite uso local.
+# O Render define 'RENDER' como uma variável de ambiente em seus serviços.
+# Além disso, não carrega durante a execução de testes (para evitar side effects indesejados).
+if not os.getenv('RENDER') and 'pytest' not in sys.modules:
+    load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 # --- Configurações Principais ---
 
 # Chave secreta para segurança do Django.
 # EM PRODUÇÃO: A variável de ambiente DJANGO_SECRET_KEY DEVE ser definida no Render.
-# EM DESENVOLVIMENTO: Será lida do .env. A chave 'sua-chave-secreta-para-dev' é um fallback,
-# mas você deve ter uma chave real e forte no seu .env para desenvolvimento também.
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'sua-chave-secreta-para-dev') # Use uma chave forte para dev!
+# EM DESENVOLVIMENTO: Será lida do .env. Se não encontrada, o Django levantará um erro,
+# o que é bom para garantir que ela sempre esteja configurada.
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 
 # Modo de depuração: True para desenvolvimento, False para produção.
 # A variável de ambiente DEBUG deve ser 'True' ou 'False' (string).
-DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+# O padrão agora é False, o que é mais seguro para produção.
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 # Hosts permitidos para servir a aplicação.
-# EM PRODUÇÃO: A variável de ambiente ALLOWED_HOSTS deve conter os domínios do Render.
-# Em desenvolvimento: 'localhost,127.0.0.1,0.0.0.0' são suficientes.
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0').split(',')
-# Adiciona o hostname do Render dinamicamente em produção
-if not DEBUG and 'RENDER_EXTERNAL_HOSTNAME' in os.environ:
-    ALLOWED_HOSTS.append(os.environ['RENDER_EXTERNAL_HOSTNAME'])
+# Em produção no Render, o hostname externo será adicionado.
+# Em desenvolvimento, 'localhost', '127.0.0.1' e '0.0.0.0' são suficientes se DEBUG=True.
+ALLOWED_HOSTS = []
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+elif DEBUG: # Se não for Render e estiver em modo de depuração (local)
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
 
-# Modelo de usuário personalizado
+# --- Modelo de usuário personalizado ---
 AUTH_USER_MODEL = 'usuarios.Usuario'
 
-# Aplicações instaladas no projeto
+# --- Aplicações instaladas no projeto ---
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -53,11 +59,13 @@ INSTALLED_APPS = [
     'crispy_bootstrap5',
     'corsheaders',
     'rest_framework',
+    'whitenoise.runserver_nostatic', # Adicionado para Whitenoise em desenvolvimento
 ]
 
-# Middlewares
+# --- Middlewares ---
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # Precisa vir antes de CommonMiddleware para CORS
+    'whitenoise.middleware.WhiteNoiseMiddleware', # Adicionado para Whitenoise em produção - DEVE SER O PRIMEIRO
+    'corsheaders.middleware.CorsMiddleware',      # Precisa vir antes de CommonMiddleware para CORS
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -67,10 +75,10 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# Configuração de URL raiz
+# --- Configuração de URL raiz ---
 ROOT_URLCONF = 'core.urls'
 
-# Configuração de templates
+# --- Configuração de templates ---
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -91,15 +99,15 @@ TEMPLATES = [
     },
 ]
 
-# Configuração do servidor WSGI
+# --- Configuração do servidor WSGI ---
 WSGI_APPLICATION = 'core.wsgi.application'
 
 # --- Configuração do Banco de Dados ---
 # Em produção no Render, a variável de ambiente DATABASE_URL será usada.
-# Em desenvolvimento, o padrão será SQLite.
+# Em desenvolvimento, o padrão será SQLite, ou a URL do .env se fornecida.
 DATABASES = {
     'default': dj_database_url.config(
-        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        default=os.getenv('DATABASE_URL', f'sqlite:///{BASE_DIR / "db.sqlite3"}'),
         conn_max_age=600,  # Tempo máximo para uma conexão de banco de dados ficar aberta
         ssl_require=not DEBUG # Exige SSL para o banco de dados em produção (Render)
     )
@@ -126,8 +134,11 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'), # Crie esta pasta na raiz do seu projeto
 ]
-# Diretório onde os arquivos estáticos serão coletados para produção
+# Diretório onde os arquivos estáticos serão coletados para produção pelo Whitenoise
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# Configuração do storage para Whitenoise em produção
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 
 # Configurações de arquivos de mídia (uploads de usuários)
 MEDIA_URL = '/media/'
@@ -150,13 +161,20 @@ CSRF_COOKIE_SECURE = not DEBUG  # True em produção HTTPS, False em desenvolvim
 CSRF_USE_SESSIONS = False # False se o token CSRF for enviado via cookie e não via sessão
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'Lax'
-# EM PRODUÇÃO: A variável de ambiente CSRF_TRUSTED_ORIGINS deve conter os domínios do seu frontend.
+# EM PRODUÇÃO: A variável de ambiente CSRF_TRUSTED_ORIGINS deve conter os domínios do seu frontend E BACKEND.
 # Em desenvolvimento: os padrões para localhost são definidos.
+# IMPORTANTE: No Render, configure CSRF_TRUSTED_ORIGINS com os domínios reais (https://...)
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000').split(',')
+# Adiciona o próprio hostname do Render para CSRF trusted origins, se for necessário para API calls internas.
+if RENDER_EXTERNAL_HOSTNAME and f"https://{RENDER_EXTERNAL_HOSTNAME}" not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
+
 
 # --- CORS (Cross-Origin Resource Sharing) ---
-# As origens permitidas para CORS serão as mesmas das origens confiáveis para CSRF.
-CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS
+# As origens permitidas para CORS.
+# EM PRODUÇÃO: A variável de ambiente CORS_ALLOWED_ORIGINS deve conter os domínios do seu frontend.
+# Em desenvolvimento: os padrões para localhost são definidos.
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
 CORS_ALLOW_CREDENTIALS = True # Permite que credenciais (cookies, headers de autorização) sejam incluídas
 
 CORS_ALLOW_HEADERS = [
@@ -184,7 +202,7 @@ CORS_ALLOW_METHODS = [
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication', # Para autenticação baseada em sessão (admin, CSRF)
-        'rest_framework.authentication.BasicAuthentication', # Opcional, para testes ou APIs simples
+        # 'rest_framework.authentication.BasicAuthentication', # Opcional, para testes ou APIs simples
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated', # Padrão: exige autenticação para todas as views de API
@@ -208,3 +226,11 @@ AUTHENTICATION_BACKENDS = [
 
 # --- OpenRouter API Key ---
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
+
+# --- Render Specific Settings (optional but good practice) ---
+# Required for WhiteNoise in production (if you used STATICFILES_STORAGE)
+# For Django 4.x and higher, this is often needed for WhiteNoise to work with Gunicorn
+if not DEBUG:
+    import logging
+    logging.getLogger('gunicorn.error').setLevel(logging.INFO)
+    logging.getLogger('gunicorn.access').setLevel(logging.INFO)
