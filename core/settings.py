@@ -174,7 +174,7 @@ if RENDER_EXTERNAL_HOSTNAME and f"https://{RENDER_EXTERNAL_HOSTNAME}" not in CSR
 # As origens permitidas para CORS.
 # EM PRODUÇÃO: A variável de ambiente CORS_ALLOWED_ORIGINS deve conter os domínios do seu frontend.
 # Em desenvolvimento: os padrões para localhost são definidos.
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'https://mindcare.onrender.com,http://localhost:3000,http://127.0.0.1:3000').split(',')
 CORS_ALLOW_CREDENTIALS = True # Permite que credenciais (cookies, headers de autorização) sejam incluídas
 
 CORS_ALLOW_HEADERS = [
