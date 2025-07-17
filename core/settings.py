@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-import dj_database_url # Certifique-se de que 'dj_database_url' está no seu requirements.txt
-import sys # Importe sys para verificar o ambiente de teste
+import dj_database_url
+import sys
 
 # Define o diretório base do projeto
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -35,8 +35,22 @@ RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+elif not DEBUG: # Se não for Render e estiver em modo de depuração (local)
+    # Adicionado para permitir hosts locais quando DEBUG é False
+    # Certifique-se de que ALLOWED_HOSTS_LOCAL está no seu .env se você for rodar com DEBUG=False localmente
+    allowed_hosts_local_str = os.getenv('ALLOWED_HOSTS_LOCAL', '')
+    if allowed_hosts_local_str:
+        ALLOWED_HOSTS.extend(allowed_hosts_local_str.split(','))
+    else:
+        # Se DEBUG é False e não está no Render, e ALLOWED_HOSTS_LOCAL não está definido,
+        # o Django ainda precisará de hosts permitidos.
+        # Você pode adicionar um raise Exception aqui ou definir hosts padrão como 'localhost'
+        # para evitar o CommandError se não quiser usar ALLOWED_HOSTS_LOCAL.
+        # Para simplificar, vou adicionar 'localhost' e '127.0.0.1' como padrão se ALLOWED_HOSTS_LOCAL não for definido
+        ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 elif DEBUG: # Se não for Render e estiver em modo de depuração (local)
     ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
+
 
 # --- Modelo de usuário personalizado ---
 AUTH_USER_MODEL = 'usuarios.Usuario'
@@ -108,7 +122,7 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': dj_database_url.config(
         default=os.getenv('DATABASE_URL', f'sqlite:///{BASE_DIR / "db.sqlite3"}'),
-        conn_max_age=600,  # Tempo máximo para uma conexão de banco de dados ficar aberta
+        conn_max_age=600,   # Tempo máximo para uma conexão de banco de dados ficar aberta
         ssl_require=not DEBUG # Exige SSL para o banco de dados em produção (Render)
     )
 }
@@ -152,12 +166,12 @@ LOGOUT_REDIRECT_URL = '/' # Redireciona para a raiz após logout
 
 SESSION_COOKIE_AGE = 1209600
 SESSION_SAVE_EVERY_REQUEST = True
-SESSION_COOKIE_SECURE = not DEBUG  # True em produção HTTPS, False em desenvolvimento HTTP
+SESSION_COOKIE_SECURE = not DEBUG   # True em produção HTTPS, False em desenvolvimento HTTP
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 
 # --- CSRF (Cross-Site Request Forgery) ---
-CSRF_COOKIE_SECURE = not DEBUG  # True em produção HTTPS, False em desenvolvimento HTTP
+CSRF_COOKIE_SECURE = not DEBUG   # True em produção HTTPS, False em desenvolvimento HTTP
 CSRF_USE_SESSIONS = False # False se o token CSRF for enviado via cookie e não via sessão
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'Lax'
