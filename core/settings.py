@@ -3,6 +3,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 import dj_database_url
 import sys
+import logging # Importar logging aqui também para garantir
+
+logger = logging.getLogger(__name__) # Definir o logger no topo do arquivo
 
 # Define o diretório base do projeto
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -175,13 +178,15 @@ CSRF_COOKIE_SECURE = not DEBUG    # True em produção HTTPS, False em desenvolv
 CSRF_USE_SESSIONS = False
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'None' # ALTERADO PARA 'None'
+
 # EM PRODUÇÃO: A variável de ambiente CSRF_TRUSTED_ORIGINS deve conter os domínios do seu frontend E BACKEND.
 # Em desenvolvimento: os padrões para localhost são definidos.
 # IMPORTANTE: No Render, configure CSRF_TRUSTED_ORIGINS com os domínios reais (https://...)
-CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000').split(',')
-# Adiciona o próprio hostname do Render para CSRF trusted origins, se for necessário para API calls internas.
-if RENDER_EXTERNAL_HOSTNAME and f"https://{RENDER_EXTERNAL_HOSTNAME}" not in CSRF_TRUSTED_ORIGINS:
-    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
+# Otimizado para incluir RENDER_EXTERNAL_HOSTNAME se ele existir
+_CSRF_TRUSTED_ORIGINS_DEFAULT = 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000,https://mindcareia.netlify.app'
+if RENDER_EXTERNAL_HOSTNAME:
+    _CSRF_TRUSTED_ORIGINS_DEFAULT += f",https://{RENDER_EXTERNAL_HOSTNAME}"
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', _CSRF_TRUSTED_ORIGINS_DEFAULT).split(',')
 
 
 # --- CORS (Cross-Origin Resource Sharing) ---
@@ -190,7 +195,6 @@ if RENDER_EXTERNAL_HOSTNAME and f"https://{RENDER_EXTERNAL_HOSTNAME}" not in CSR
 # Em desenvolvimento: os padrões para localhost são definidos.
 CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'https://mindcareia.netlify.app,https://mindcare-zwlv.onrender.com,http://localhost:3000,http://127.0.0.1:3000').split(',')
 CORS_ALLOW_CREDENTIALS = True # Permite que credenciais (cookies, headers de autorização) sejam incluídas
-# CORS_ALLOW_CREDENTIALS = True # Linha duplicada, removida para clareza
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
@@ -245,10 +249,7 @@ OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 # Required for WhiteNoise in production (if you used STATICFILES_STORAGE)
 # For Django 4.x and higher, this is often needed for WhiteNoise to work with Gunicorn
 if not DEBUG:
-    import logging
-    logger = logging.getLogger(__name__) # Use __name__ para o logger do módulo
-
-    # Adicionando logs de depuração para verificar as configurações em tempo de execução
+    # Estas linhas de log só serão ativadas se DEBUG for False (ou seja, em produção)
     logger.info(f"DEBUG (final): {DEBUG}")
     logger.info(f"ALLOWED_HOSTS (final): {ALLOWED_HOSTS}")
     logger.info(f"CORS_ALLOWED_ORIGINS (final): {CORS_ALLOWED_ORIGINS}")
