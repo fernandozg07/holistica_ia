@@ -71,7 +71,7 @@ INSTALLED_APPS = [
     # Terceiros
     'crispy_forms',
     'crispy_bootstrap5',
-    'corsheaders',
+    'corsheaders', # Adicionado para CORS
     'rest_framework',
     'whitenoise.runserver_nostatic', # Adicionado para Whitenoise em desenvolvimento
 ]
@@ -171,7 +171,7 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 
 # --- CSRF (Cross-Site Request Forgery) ---
-CSRF_COOKIE_SECURE = not DEBUG   # True em produção HTTPS, False em desenvolvimento HTTP
+CSRF_COOKIE_SECURE = not DEBUG    # True em produção HTTPS, False em desenvolvimento HTTP
 CSRF_USE_SESSIONS = False # False se o token CSRF for enviado via cookie e não via sessão
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'Lax'
@@ -246,5 +246,13 @@ OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 # For Django 4.x and higher, this is often needed for WhiteNoise to work with Gunicorn
 if not DEBUG:
     import logging
+    logger = logging.getLogger(__name__) # Use __name__ para o logger do módulo
+
+    # Adicionando logs de depuração para verificar as configurações em tempo de execução
+    logger.info(f"DEBUG (final): {DEBUG}")
+    logger.info(f"ALLOWED_HOSTS (final): {ALLOWED_HOSTS}")
+    logger.info(f"CORS_ALLOWED_ORIGINS (final): {CORS_ALLOWED_ORIGINS}")
+    logger.info(f"CSRF_TRUSTED_ORIGINS (final): {CSRF_TRUSTED_ORIGINS}")
+
     logging.getLogger('gunicorn.error').setLevel(logging.INFO)
     logging.getLogger('gunicorn.access').setLevel(logging.INFO)
