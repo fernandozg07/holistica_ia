@@ -4,7 +4,8 @@ from django.contrib.auth import login, logout, authenticate, get_user_model
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.http import JsonResponse
 from django.db.models import Q, Count, Avg # Importar Avg
-
+import logging # Adicione esta linha no topo do arquivo
+logger = logging.getLogger(__name__)
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -41,28 +42,28 @@ def csrf_token_view(request):
     """
     return JsonResponse({'detail': 'CSRF cookie set com sucesso'})
 
-
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_api(request):
-    """
-    Endpoint de login para o frontend React.
-    Autentica o utilizador e retorna os dados do utilizador autenticado.
-    """
     email = request.data.get('email')
     password = request.data.get('password')
 
+    logger.info(f"Tentativa de login para email: {email}") # Log de depuração
+
     if not email or not password:
+        logger.warning("Login falhou: Email ou palavra-passe ausentes.") # Log de depuração
         return Response({'detail': 'Email e palavra-passe são obrigatórios.'}, status=status.HTTP_400_BAD_REQUEST)
 
     user = authenticate(request, email=email, password=password)
+
     if user and user.is_active:
         login(request, user) # Autentica o utilizador na sessão do Django
+        logger.info(f"Login bem-sucedido para usuário: {user.email}, tipo: {user.tipo}") # Log de sucesso
         # Retorna os dados do usuário, incluindo o tipo, para o frontend
         return Response({'user': UsuarioSerializer(user).data})
-
-    return Response({'detail': 'Credenciais inválidas.'}, status=status.HTTP_401_UNAUTHORIZED)
-
+    else:
+        logger.warning(f"Login falhou: Credenciais inválidas para email: {email}. Usuário ativo: {user.is_active if user else 'N/A'}") # Log de falha
+        return Response({'detail': 'Credenciais inválidas.'}, status=status.HTTP_401_UNAUTHORIZED)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
