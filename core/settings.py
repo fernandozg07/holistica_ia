@@ -168,13 +168,13 @@ SESSION_COOKIE_AGE = 1209600
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_COOKIE_SECURE = not DEBUG   # True em produção HTTPS, False em desenvolvimento HTTP
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'None' # ALTERADO PARA 'None'
 
 # --- CSRF (Cross-Site Request Forgery) ---
 CSRF_COOKIE_SECURE = not DEBUG    # True em produção HTTPS, False em desenvolvimento HTTP
-CSRF_USE_SESSIONS = False # False se o token CSRF for enviado via cookie e não via sessão
+CSRF_USE_SESSIONS = False
 CSRF_COOKIE_HTTPONLY = False
-CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'None' # ALTERADO PARA 'None'
 # EM PRODUÇÃO: A variável de ambiente CSRF_TRUSTED_ORIGINS deve conter os domínios do seu frontend E BACKEND.
 # Em desenvolvimento: os padrões para localhost são definidos.
 # IMPORTANTE: No Render, configure CSRF_TRUSTED_ORIGINS com os domínios reais (https://...)
@@ -190,7 +190,7 @@ if RENDER_EXTERNAL_HOSTNAME and f"https://{RENDER_EXTERNAL_HOSTNAME}" not in CSR
 # Em desenvolvimento: os padrões para localhost são definidos.
 CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'https://mindcareia.netlify.app,https://mindcare-zwlv.onrender.com,http://localhost:3000,http://127.0.0.1:3000').split(',')
 CORS_ALLOW_CREDENTIALS = True # Permite que credenciais (cookies, headers de autorização) sejam incluídas
-CORS_ALLOW_CREDENTIALS = True
+# CORS_ALLOW_CREDENTIALS = True # Linha duplicada, removida para clareza
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
