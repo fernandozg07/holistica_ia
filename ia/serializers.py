@@ -1,13 +1,12 @@
 from rest_framework import serializers
 from .models import Conversa # Importa o modelo Conversa do próprio app 'ia'
 from usuarios.models import Usuario # Importa o modelo Usuario do app 'usuarios'
+# from usuarios.serializers import UsuarioSerializer as BaseUsuarioSerializer # ✅ Melhor prática: importar se já existe
 
-
-# Re-incluir UsuarioSerializer aqui ou importá-lo de usuarios.serializers
-# Se o UsuarioSerializer já estiver definido em usuarios.serializers,
-# a melhor prática é importá-lo de lá para evitar duplicação.
-# Por simplicidade e para garantir que este arquivo seja autônomo para o contexto de IA,
-# vou defini-lo aqui, mas considere a importação se já existir em outro lugar.
+# ✅ NOTA: Se UsuarioSerializer já estiver definido em 'usuarios.serializers',
+# é melhor importá-lo de lá para evitar duplicação e manter um único ponto de verdade.
+# Por exemplo: from usuarios.serializers import UsuarioSerializer
+# Para este contexto, mantemos a definição local para clareza.
 class UsuarioSerializer(serializers.ModelSerializer):
     idade = serializers.ReadOnlyField()
 
@@ -25,16 +24,16 @@ class UsuarioSerializer(serializers.ModelSerializer):
 class ConversaSerializer(serializers.ModelSerializer):
     """
     Serializer para o modelo Conversa.
-    Lida com a serialização de interações de conversa entre o usuário e a IA.
+    Lida com a serialização de interações de conversa entre o utilizador e a IA.
     """
-    # Campo 'usuario' para leitura, que retorna o objeto completo do usuário.
+    # Campo 'usuario' para leitura, que retorna o objeto completo do utilizador.
     usuario = UsuarioSerializer(read_only=True)
 
-    # Campo 'usuario_id' para escrita, que permite enviar apenas o ID do usuário.
+    # Campo 'usuario_id' para escrita, que permite enviar apenas o ID do utilizador.
     # 'write_only=True' significa que este campo é usado para entrada de dados,
     # mas não é incluído na saída serializada.
     usuario_id = serializers.PrimaryKeyRelatedField(
-        queryset=Usuario.objects.all(), # Permite qualquer usuário existente
+        queryset=Usuario.objects.all(), # Permite qualquer utilizador existente
         source='usuario', # Mapeia para o campo 'usuario' do modelo Conversa
         write_only=True
     )
@@ -49,4 +48,3 @@ class ConversaSerializer(serializers.ModelSerializer):
         # Campos que são apenas para leitura.
         # 'data_conversa' é auto_now_add, então é gerado automaticamente.
         read_only_fields = ['id', 'data_conversa', 'usuario']
-

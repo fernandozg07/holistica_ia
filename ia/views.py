@@ -17,29 +17,56 @@ from usuarios.models import Usuario
 def detectar_sentimento_manual(mensagem):
     """
     Detecta o sentimento, categoria e intensidade de uma mensagem.
+    Aprimorado para reconhecer uma gama mais ampla de emoções.
     """
     mensagem = mensagem.lower()
-    negativas = ["triste", "cansado", "ansioso", "deprimido", "estressado", "exausto", "preocupado"]
-    positivas = ["feliz", "bem", "animado", "ótimo", "grato", "leve", "tranquilo"]
+    
+    # Dicionário de palavras-chave para sentimentos e categorias
+    sentimentos_map = {
+        "Positivo": {
+            "palavras": ["feliz", "bem", "animado", "ótimo", "grato", "leve", "tranquilo", "alegre", "contente", "satisfeito", "esperançoso", "entusiasmado"],
+            "categoria": "Bem-estar"
+        },
+        "Negativo": {
+            "palavras": ["triste", "cansado", "ansioso", "deprimido", "estressado", "exausto", "preocupado", "desanimado", "solitário", "frustrado", "aborrecido"],
+            "categoria": "Emocional"
+        },
+        "Raiva": {
+            "palavras": ["raiva", "irritado", "bravo", "furioso", "revoltado", "zangado", "ódio"],
+            "categoria": "Conflito"
+        },
+        "Medo": {
+            "palavras": ["medo", "assustado", "apavorado", "temeroso", "pânico", "susto"],
+            "categoria": "Insegurança"
+        },
+        "Surpresa": {
+            "palavras": ["surpreso", "chocado", "espantado", "incrível", "inesperado"],
+            "categoria": "Reação"
+        },
+        "Nojo": {
+            "palavras": ["nojo", "repulsa", "asco", "detesto", "horrível"],
+            "categoria": "Aversão"
+        }
+    }
 
-    if any(p in mensagem for p in negativas):
-        sentimento = "Negativo"
-        categoria = "Emocional"
-    elif any(p in mensagem for p in positivas):
-        sentimento = "Positivo"
-        categoria = "Bem-estar"
-    else:
-        sentimento = "Neutro"
-        categoria = "Geral"
+    sentimento_detectado = "Neutro"
+    categoria_detectada = "Geral"
 
-    if "muito" in mensagem or "demais" in mensagem:
-        intensidade = "Alta"
-    elif "um pouco" in mensagem:
-        intensidade = "Média"
-    else:
-        intensidade = "Baixa"
+    # Detecta o sentimento principal
+    for sentimento, info in sentimentos_map.items():
+        if any(palavra in mensagem for palavra in info["palavras"]):
+            sentimento_detectado = sentimento
+            categoria_detectada = info["categoria"]
+            break # Encontra o primeiro e sai
 
-    return sentimento, categoria, intensidade
+    # Detecta a intensidade
+    intensidade_detectada = "Baixa"
+    if "muito" in mensagem or "demais" in mensagem or "extremamente" in mensagem or "profundamente" in mensagem:
+        intensidade_detectada = "Alta"
+    elif "um pouco" in mensagem or "meio" in mensagem or "pouco" in mensagem:
+        intensidade_detectada = "Média"
+    
+    return sentimento_detectado, categoria_detectada, intensidade_detectada
 
 
 # === VIEWS DE API ===
@@ -49,7 +76,7 @@ def detectar_sentimento_manual(mensagem):
 def responder(request):
     """
     Endpoint de API para o chat com a IA.
-    Recebe a mensagem do usuário via POST (JSON), gera uma resposta da IA,
+    Recebe a mensagem do utilizador via POST (JSON), gera uma resposta da IA,
     detecta o sentimento e salva a conversa no banco de dados.
     Retorna a resposta da IA e os dados de sentimento em JSON.
     """
@@ -62,9 +89,9 @@ def responder(request):
         resposta_ia = gerar_resposta_openrouter(mensagem_usuario)
         sentimento, categoria, intensidade = detectar_sentimento_manual(mensagem_usuario)
 
-        # Cria um novo registro de conversa no banco de dados, associando ao usuário logado
+        # Cria um novo registo de conversa no banco de dados, associando ao utilizador logado
         Conversa.objects.create(
-            usuario=request.user, # Associa a conversa ao usuário logado
+            usuario=request.user, # Associa a conversa ao utilizador logado
             mensagem_usuario=mensagem_usuario,
             resposta_ia=resposta_ia,
             sentimento=sentimento,
@@ -89,10 +116,10 @@ def responder(request):
 @permission_classes([IsAuthenticated])
 def historico_api(request):
     """
-    API REST que retorna o histórico de conversas com a IA do usuário logado.
+    API REST que retorna o histórico de conversas com a IA do utilizador logado.
     Retorna as últimas 50 conversas.
     """
-    # Filtra as conversas APENAS do usuário logado
+    # Filtra as conversas APENAS do utilizador logado
     historico = Conversa.objects.filter(usuario=request.user).order_by('-data_conversa')[:50]
 
     # Serializa o queryset de conversas usando o ConversaSerializer

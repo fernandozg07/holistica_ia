@@ -3,19 +3,19 @@ from datetime import date, timedelta
 from django.contrib.auth import login, logout, authenticate, get_user_model
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.http import JsonResponse
-from django.db.models import Q, Count, Avg # Importar Avg
+from django.db.models import Q, Count, Avg
 
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.exceptions import PermissionDenied, ValidationError # Importar ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from .models import Usuario, Paciente, Sessao, Mensagem, Relatorio, Notificacao
 # Importa o modelo Conversa do app 'ia' para uso nos dashboards
 from ia.models import Conversa
-from django.utils import timezone # Importe timezone
+from django.utils import timezone
 from django.middleware.csrf import get_token # Importar get_token para CSRF
 
 from .serializers import (
@@ -37,7 +37,7 @@ User = get_user_model()
 @permission_classes([AllowAny])
 def csrf_token_view(request):
     """
-    Retorna o CSRF token no corpo da resposta para que o frontend possa acessá-lo.
+    Retorna o CSRF token no corpo da resposta para que o frontend possa acedê-lo.
     O token também é definido como um cookie pelo Django.
     """
     token = get_token(request)
@@ -60,7 +60,7 @@ def login_api(request):
     user = authenticate(request, email=email, password=password)
     if user and user.is_active:
         login(request, user) # Autentica o utilizador na sessão do Django
-        # Retorna os dados do usuário, incluindo o tipo, para o frontend
+        # Retorna os dados do utilizador, incluindo o tipo, para o frontend
         return Response({'user': UsuarioSerializer(user).data})
 
     return Response({'detail': 'Credenciais inválidas.'}, status=status.HTTP_401_UNAUTHORIZED)
@@ -70,15 +70,17 @@ def login_api(request):
 @permission_classes([AllowAny])
 def register_api(request):
     """
-    Endpoint de registro para o frontend React.
+    Endpoint de registo para o frontend React.
     Cria um novo utilizador e, se for paciente, cria também o perfil de paciente.
     """
     serializer = UsuarioSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.save() # Cria o Usuario
 
-        # Se o tipo de usuário for 'paciente', cria também o perfil de Paciente
+        # Se o tipo de utilizador for 'paciente', cria também o perfil de Paciente
         if user.tipo == 'paciente':
+            # ✅ NOTA: Aqui, o nome_completo do Paciente é inicializado com o nome completo do Usuario.
+            # Se o frontend enviar um nome_completo diferente para o Paciente, ele será ignorado aqui.
             Paciente.objects.create(usuario=user, nome_completo=user.get_full_name())
             # Nota: O terapeuta para o paciente pode ser atribuído posteriormente
             # ou via um processo de convite/associação.
@@ -120,19 +122,19 @@ class PacienteViewSet(viewsets.ModelViewSet):
     e pacientes visualizem os seus próprios dados de paciente.
     """
     serializer_class = PacienteSerializer
-    permission_classes = [IsAuthenticated] # Todos autenticados podem acessar, mas a lógica abaixo restringe
+    permission_classes = [IsAuthenticated] # Todos autenticados podem aceder, mas a lógica abaixo restringe
     filter_backends = [filters.SearchFilter]
     search_fields = ['nome_completo', 'usuario__email']
 
     def get_queryset(self):
         user = self.request.user
         if user.tipo == 'terapeuta':
-            # Terapeutas veem apenas seus próprios pacientes
+            # Terapeutas veem apenas os seus próprios pacientes
             return Paciente.objects.filter(terapeuta=user)
         elif user.tipo == 'paciente':
-            # Pacientes veem apenas seu próprio perfil Paciente
+            # Pacientes veem apenas o seu próprio perfil Paciente
             return Paciente.objects.filter(usuario=user)
-        elif user.is_superuser: # Superusuários podem ver todos os pacientes
+        elif user.is_superuser: # Superutilizadores podem ver todos os pacientes
             return Paciente.objects.all()
         return Paciente.objects.none()
 
@@ -140,18 +142,27 @@ class PacienteViewSet(viewsets.ModelViewSet):
         """
         Associa o terapeuta autenticado ao paciente recém-criado.
         Cria ou associa um objeto Usuario ao Paciente.
-        Apenas terapeutas e superusuários podem criar pacientes.
+        Apenas terapeutas e superutilizadores podem criar pacientes.
         """
         user = self.request.user
         if user.tipo != 'terapeuta' and not user.is_superuser:
-            raise PermissionDenied("Apenas terapeutas e superusuários podem criar pacientes.")
+            raise PermissionDenied("Apenas terapeutas e superutilizadores podem criar pacientes.")
 
         email = self.request.data.get('email')
         nome_completo = self.request.data.get('nome_completo')
-        
+        data_nascimento = self.request.data.get('data_nascimento') # ✅ Adicionado para validação e criação do Usuario
+
         if not email:
             raise ValidationError({"email": "O email é obrigatório para criar um novo paciente."})
         
+        # ✅ Validação do formato da data de nascimento (se for enviada)
+        if data_nascimento:
+            try:
+                # Tenta converter para o formato esperado (YYYY-MM-DD)
+                date.fromisoformat(data_nascimento) 
+            except ValueError:
+                raise ValidationError({"data_nascimento": "Formato de data inválido. Use YYYY-MM-DD."})
+
         first_name = nome_completo.split(' ')[0] if nome_completo else ''
         last_name = ' '.join(nome_completo.split(' ')[1:]) if nome_completo else ''
 
@@ -162,33 +173,45 @@ class PacienteViewSet(viewsets.ModelViewSet):
             if Paciente.objects.filter(usuario=usuario_paciente).exists():
                 raise ValidationError({"email": "Já existe um perfil de paciente associado a este utilizador."})
         except Usuario.DoesNotExist:
+            # Cria um novo Usuario se não existir
             usuario_paciente = Usuario.objects.create_user(
                 email=email,
-                username=email,
+                username=email, # Ou um username gerado, se preferir
                 first_name=first_name,
                 last_name=last_name,
                 tipo='paciente',
                 is_active=True,
-                password=User.objects.make_random_password()
+                password=User.objects.make_random_password(), # Gera uma palavra-passe aleatória
+                data_nascimento=data_nascimento if data_nascimento else None # ✅ Passa a data de nascimento
             )
         
-        # Superusuários podem criar pacientes, mas precisam definir um terapeuta para eles.
-        # Se um superusuário está criando, e não especificou um terapeuta, ele se torna o terapeuta.
-        # Ou você pode exigir que o superusuário especifique um terapeuta.
-        terapeuta_para_paciente = user if user.tipo == 'terapeuta' else None
-        if user.is_superuser and not terapeuta_para_paciente:
-            # Lógica para superusuário: pode ser necessário passar o 'terapeuta_id' no request.data
-            # Ou o superusuário se torna o terapeuta padrão se não for especificado.
-            # Por simplicidade, se superuser, ele pode criar sem atribuir um terapeuta explicitamente aqui,
-            # ou você pode adicionar uma validação para exigir 'terapeuta_id' para superusers.
-            pass # A atribuição do terapeuta será feita abaixo se 'terapeuta' for um campo do serializer.
-
-        serializer.save(terapeuta=terapeuta_para_paciente or user, usuario=usuario_paciente) # Ajustado para superuser
+        # Determina o terapeuta para o paciente
+        terapeuta_para_paciente = None
+        if user.tipo == 'terapeuta':
+            terapeuta_para_paciente = user
+        elif user.is_superuser:
+            # ✅ Superutilizadores podem especificar um terapeuta_id no payload.
+            # Se não for especificado, o superutilizador pode ser o terapeuta padrão,
+            # ou você pode forçar a especificação.
+            # Aqui, se o superutilizador não especificar, ele não será automaticamente atribuído.
+            # O serializer.save() usará o 'terapeuta' do validated_data se 'terapeuta_id' foi enviado.
+            terapeuta_id_from_payload = serializer.validated_data.get('terapeuta') 
+            if terapeuta_id_from_payload:
+                terapeuta_para_paciente = terapeuta_id_from_payload
+            else:
+                # ✅ OPÇÃO: Se superuser não especificar, pode forçar erro ou atribuir a si mesmo.
+                # Por agora, deixamos como None e o campo no modelo Paciente pode ser null=True.
+                pass 
+        
+        # Salva o serializer, associando o utilizador e o terapeuta
+        # O 'terapeuta' será o terapeuta logado, ou o terapeuta especificado pelo superutilizador,
+        # ou None se o superutilizador não especificar e o campo permitir nulos.
+        serializer.save(terapeuta=terapeuta_para_paciente, usuario=usuario_paciente)
 
     def perform_update(self, serializer):
         """
-        Permite atualizar apenas se o usuário logado for o terapeuta do paciente,
-        o próprio paciente atualizando seu perfil, ou um superusuário.
+        Permite atualizar apenas se o utilizador logado for o terapeuta do paciente,
+        o próprio paciente a atualizar o seu perfil, ou um superutilizador.
         """
         user = self.request.user
         instance = self.get_object()
@@ -197,19 +220,19 @@ class PacienteViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Não tem permissão para atualizar este paciente.")
         elif user.tipo == 'paciente' and instance.usuario != user and not user.is_superuser:
             raise PermissionDenied("Não tem permissão para atualizar este paciente.")
-        elif not user.is_superuser and user.tipo not in ['terapeuta', 'paciente']: # Se não é superuser e não é terapeuta/paciente
+        elif not user.is_superuser and user.tipo not in ['terapeuta', 'paciente']: # Se não é superutilizador e não é terapeuta/paciente
              raise PermissionDenied("Não tem permissão para atualizar este paciente.")
         
-        # Se o usuário está tentando mudar o 'usuario' associado, isso não deve ser permitido
+        # Se o utilizador está a tentar mudar o 'usuario' associado, isso não deve ser permitido
         if 'usuario' in serializer.validated_data and serializer.validated_data['usuario'] != instance.usuario:
-            raise ValidationError({"usuario": "Não é permitido alterar o usuário associado a um paciente."})
+            raise ValidationError({"usuario": "Não é permitido alterar o utilizador associado a um paciente."})
 
         serializer.save()
 
     def perform_destroy(self, instance):
         """
-        Permite a exclusão de um paciente apenas pelo terapeuta associado ou por um superusuário.
-        Pacientes não podem excluir seu próprio perfil Paciente.
+        Permite a exclusão de um paciente apenas pelo terapeuta associado ou por um superutilizador.
+        Pacientes não podem excluir o seu próprio perfil Paciente.
         """
         user = self.request.user
         
@@ -246,7 +269,7 @@ class SessaoViewSet(viewsets.ModelViewSet):
             if paciente_perfil:
                 return Sessao.objects.filter(paciente=paciente_perfil)
             return Sessao.objects.none()
-        elif user.is_superuser: # Superusuários podem ver todas as sessões
+        elif user.is_superuser: # Superutilizadores podem ver todas as sessões
             return Sessao.objects.all()
         return Sessao.objects.none()
 
@@ -283,12 +306,12 @@ class SessaoViewSet(viewsets.ModelViewSet):
                 
                 session_instance = serializer.save(paciente=paciente_perfil, terapeuta=paciente_perfil.terapeuta)
             
-            elif user.is_superuser: # Superusuários podem criar sessões para qualquer terapeuta/paciente
-                # Superusuários devem fornecer 'terapeuta_id' e 'paciente_id' no request.data
+            elif user.is_superuser: # Superutilizadores podem criar sessões para qualquer terapeuta/paciente
+                # Superutilizadores devem fornecer 'terapeuta_id' e 'paciente_id' no request.data
                 terapeuta_id = self.request.data.get('terapeuta_id')
                 paciente_id = self.request.data.get('paciente_id')
                 if not terapeuta_id or not paciente_id:
-                    raise ValidationError({"detail": "Para superusuários, 'terapeuta_id' e 'paciente_id' são obrigatórios."})
+                    raise ValidationError({"detail": "Para superutilizadores, 'terapeuta_id' e 'paciente_id' são obrigatórios."})
                 
                 terapeuta_obj = Usuario.objects.get(pk=terapeuta_id, tipo='terapeuta')
                 paciente_obj = Paciente.objects.get(pk=paciente_id)
@@ -299,7 +322,7 @@ class SessaoViewSet(viewsets.ModelViewSet):
                 session_instance = serializer.save(terapeuta=terapeuta_obj, paciente=paciente_obj)
 
             else:
-                raise PermissionDenied("Acesso negado. Apenas terapeutas, pacientes e superusuários podem criar sessões.")
+                raise PermissionDenied("Acesso negado. Apenas terapeutas, pacientes e superutilizadores podem criar sessões.")
 
             # --- Lógica de Notificação para Sessão Criada ---
             if session_instance:
@@ -308,7 +331,7 @@ class SessaoViewSet(viewsets.ModelViewSet):
                     usuario=session_instance.paciente.usuario,
                     tipo='sessao',
                     assunto='Sessão Agendada!',
-                    conteudo=f'Sua sessão com {session_instance.terapeuta.get_full_name()} foi agendada para {session_instance.data.strftime("%d/%m/%Y às %H:%M")}.',
+                    conteudo=f'A sua sessão com {session_instance.terapeuta.get_full_name()} foi agendada para {session_instance.data.strftime("%d/%m/%Y às %H:%M")}.',
                     link=f'/sessoes/{session_instance.id}/editar',
                     lida=False,
                     data_criacao=timezone.now()
@@ -337,12 +360,12 @@ class SessaoViewSet(viewsets.ModelViewSet):
         old_status = instance.status
 
         try:
-            # Permite a atualização se for o terapeuta responsável, o próprio paciente ou um superusuário
+            # Permite a atualização se for o terapeuta responsável, o próprio paciente ou um superutilizador
             if user.tipo == 'terapeuta' and instance.terapeuta == user:
                 session_instance = serializer.save()
             elif user.tipo == 'paciente' and instance.paciente.usuario == user:
                 session_instance = serializer.save()
-            elif user.is_superuser: # Superusuários podem atualizar qualquer sessão
+            elif user.is_superuser: # Superutilizadores podem atualizar qualquer sessão
                 session_instance = serializer.save()
             else:
                 raise PermissionDenied("Não tem permissão para atualizar esta sessão.")
@@ -351,14 +374,14 @@ class SessaoViewSet(viewsets.ModelViewSet):
             if session_instance:
                 update_message = "atualizada"
                 if session_instance.status != old_status:
-                    update_message = f"teve seu status alterado para '{session_instance.status}'"
+                    update_message = f"teve o seu status alterado para '{session_instance.status}'"
                 
                 # Notificação para o Paciente
                 Notificacao.objects.create(
                     usuario=session_instance.paciente.usuario,
                     tipo='sessao',
                     assunto=f'Sessão {update_message.capitalize()}!',
-                    conteudo=f'Sua sessão com {session_instance.terapeuta.get_full_name()} em {session_instance.data.strftime("%d/%m/%Y às %H:%M")} foi {update_message}.',
+                    conteudo=f'A sua sessão com {session_instance.terapeuta.get_full_name()} em {session_instance.data.strftime("%d/%m/%Y às %H:%M")} foi {update_message}.',
                     link=f'/sessoes/{session_instance.id}/editar',
                     lida=False,
                     data_criacao=timezone.now()
@@ -384,7 +407,7 @@ class SessaoViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         """
         Permite a exclusão de uma sessão pelo terapeuta responsável,
-        pelo paciente que agendou a sessão, ou por um superusuário.
+        pelo paciente que agendou a sessão, ou por um superutilizador.
         """
         user = self.request.user
 
@@ -411,7 +434,7 @@ class MensagemViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         Filtra mensagens enviadas ou recebidas pelo utilizador autenticado.
-        Superusuários podem ver todas as mensagens.
+        Superutilizadores podem ver todas as mensagens.
         """
         user = self.request.user
         if user.is_superuser:
@@ -446,7 +469,7 @@ class MensagemViewSet(viewsets.ModelViewSet):
                 lida=False,
                 data_criacao=timezone.now()
             )
-            print(f"Notificação criada com sucesso para o usuário {destinatario_notificacao.username}. ID da notificação: {notificacao_instance.id}")
+            print(f"Notificação criada com sucesso para o utilizador {destinatario_notificacao.username}. ID da notificação: {notificacao_instance.id}")
 
         except Exception as e:
             print(f"ERRO ao criar notificação de mensagem: {e}")
@@ -456,12 +479,12 @@ class MensagemViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         user = self.request.user
 
-        # Apenas o remetente pode atualizar suas próprias mensagens (ex: marcar como lida)
-        # E superusuários podem atualizar qualquer mensagem.
+        # Apenas o remetente pode atualizar as suas próprias mensagens (ex: marcar como lida)
+        # E superutilizadores podem atualizar qualquer mensagem.
         if instance.remetente != user and not user.is_superuser:
             raise PermissionDenied("Não tem permissão para atualizar esta mensagem.")
         
-        # Impedir mudança de remetente/destinatário via PUT/PATCH, a menos que seja superusuário
+        # Impedir mudança de remetente/destinatário via PUT/PATCH, a menos que seja superutilizador
         if not user.is_superuser:
             if 'remetente' in serializer.validated_data and serializer.validated_data['remetente'] != instance.remetente:
                 raise PermissionDenied("Não é permitido alterar o remetente da mensagem.")
@@ -473,10 +496,10 @@ class MensagemViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         """
         Permite a exclusão de uma mensagem apenas pelo remetente
-        ou por um superusuário.
+        ou por um superutilizador.
         """
         user = self.request.user
-        # Apenas o remetente pode deletar sua própria mensagem, ou um superusuário
+        # Apenas o remetente pode deletar a sua própria mensagem, ou um superutilizador
         if instance.remetente != user and not user.is_superuser:
             raise PermissionDenied("Não tem permissão para deletar esta mensagem.")
         instance.delete()
@@ -498,7 +521,7 @@ class RelatorioViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         Filtra relatórios com base no tipo de utilizador autenticado.
-        Superusuários podem ver todos os relatórios.
+        Superutilizadores podem ver todos os relatórios.
         """
         user = self.request.user
         if user.tipo == 'terapeuta':
@@ -508,36 +531,36 @@ class RelatorioViewSet(viewsets.ModelViewSet):
             if paciente_perfil:
                 return Relatorio.objects.filter(paciente=paciente_perfil)
             return Relatorio.objects.none()
-        elif user.is_superuser: # Superusuários podem ver todos os relatórios
+        elif user.is_superuser: # Superutilizadores podem ver todos os relatórios
             return Relatorio.objects.all()
         return Relatorio.objects.none()
 
     def perform_create(self, serializer):
         """
         Associa o terapeuta autenticado e o paciente ao relatório recém-criado.
-        Apenas terapeutas e superusuários podem criar relatórios.
+        Apenas terapeutas e superutilizadores podem criar relatórios.
         """
         user = self.request.user
         if user.tipo != 'terapeuta' and not user.is_superuser:
-            raise PermissionDenied("Apenas terapeutas e superusuários podem criar relatórios.")
+            raise PermissionDenied("Apenas terapeutas e superutilizadores podem criar relatórios.")
 
         paciente_obj = serializer.validated_data.get('paciente')
 
         if not paciente_obj:
             raise ValidationError({"paciente_id": "O ID do paciente é obrigatório para criar um relatório."})
 
-        # Validação: Garante que o paciente seja um paciente do terapeuta autenticado (ou que o usuário é superusuário)
+        # Validação: Garante que o paciente seja um paciente do terapeuta autenticado (ou que o utilizador é superutilizador)
         if paciente_obj.terapeuta != user and not user.is_superuser:
             raise PermissionDenied("Não tem permissão para criar relatórios para este paciente.")
 
-        # Salva o serializer, associando o terapeuta autenticado (ou o superusuário) e o objeto paciente
+        # Salva o serializer, associando o terapeuta autenticado (ou o superutilizador) e o objeto paciente
         serializer.save(terapeuta=user, paciente=paciente_obj)
 
     def perform_update(self, serializer):
         instance = self.get_object()
         user = self.request.user
 
-        # Apenas o terapeuta que criou o relatório ou um superusuário pode atualizá-lo
+        # Apenas o terapeuta que criou o relatório ou um superutilizador pode atualizá-lo
         if (user.tipo == 'terapeuta' and instance.terapeuta == user) or user.is_superuser:
             serializer.save()
         elif user.tipo == 'paciente': # Pacientes não devem poder atualizar relatórios
@@ -548,10 +571,10 @@ class RelatorioViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         """
         Permite a exclusão de um relatório apenas pelo terapeuta que o criou
-        ou por um superusuário. Pacientes não podem deletar relatórios.
+        ou por um superutilizador. Pacientes não podem deletar relatórios.
         """
         user = self.request.user
-        # Apenas o terapeuta que criou o relatório pode deletá-lo, ou um superusuário
+        # Apenas o terapeuta que criou o relatório pode deletá-lo, ou um superutilizador
         if (user.tipo == 'terapeuta' and instance.terapeuta == user) or user.is_superuser:
             instance.delete()
         elif user.tipo == 'paciente':
@@ -570,13 +593,13 @@ def buscar_pacientes_api(request):
     Retorna IDs e nomes completos.
     """
     user = request.user
-    if user.tipo != 'terapeuta' and not user.is_superuser: # Permite terapeutas e superusuários
+    if user.tipo != 'terapeuta' and not user.is_superuser: # Permite terapeutas e superutilizadores
         return Response({'detail': 'Acesso negado. Apenas terapeutas e administradores podem buscar pacientes.'}, status=status.HTTP_403_FORBIDDEN)
 
     termo = request.GET.get('search', '')
     
-    # Se o usuário é terapeuta, filtra pelos seus próprios pacientes.
-    # Se é superusuário, pode buscar em todos os pacientes.
+    # Se o utilizador é terapeuta, filtra pelos seus próprios pacientes.
+    # Se é superutilizador, pode buscar em todos os pacientes.
     if user.tipo == 'terapeuta':
         pacientes_queryset = Paciente.objects.filter(terapeuta=user)
     elif user.is_superuser:
@@ -606,11 +629,11 @@ def buscar_pacientes_api(request):
 def meu_terapeuta(request):
     """
     API para pacientes buscarem as informações do seu terapeuta principal.
-    Apenas pacientes autenticados podem acessar.
+    Apenas pacientes autenticados podem aceder.
     """
     user = request.user
-    if user.tipo != 'paciente' and not user.is_superuser: # Superusuário também pode ver, se necessário
-        return Response({'detail': 'Acesso negado. Apenas pacientes podem buscar seu terapeuta.'}, status=status.HTTP_403_FORBIDDEN)
+    if user.tipo != 'paciente' and not user.is_superuser: # Superutilizador também pode ver, se necessário
+        return Response({'detail': 'Acesso negado. Apenas pacientes podem buscar o seu terapeuta.'}, status=status.HTTP_403_FORBIDDEN)
 
     paciente_perfil = Paciente.objects.filter(usuario=user).first()
     if not paciente_perfil:
@@ -647,21 +670,21 @@ def painel_terapeuta_api(request):
     """
     API para obter dados do painel do terapeuta.
     Retorna os dados do terapeuta autenticado e uma lista dos seus pacientes.
-    Apenas terapeutas e superusuários podem acessar.
+    Apenas terapeutas e superutilizadores podem aceder.
     """
     user = request.user
-    if user.tipo != 'terapeuta' and not user.is_superuser: # Permite terapeutas e superusuários
+    if user.tipo != 'terapeuta' and not user.is_superuser: # Permite terapeutas e superutilizadores
         return Response({'detail': 'Acesso negado. Apenas terapeutas e administradores podem aceder a este painel.'}, status=status.HTTP_403_FORBIDDEN)
 
     terapeuta_data = UsuarioSerializer(user).data
     
-    # Total de Pacientes (filtrado pelo terapeuta logado ou todos se for superusuário)
+    # Total de Pacientes (filtrado pelo terapeuta logado ou todos se for superutilizador)
     if user.tipo == 'terapeuta':
         total_pacientes = Paciente.objects.filter(terapeuta=user).count()
         pacientes_do_terapeuta_usuario_ids = Paciente.objects.filter(terapeuta=user).values_list('usuario__id', flat=True)
     elif user.is_superuser:
         total_pacientes = Paciente.objects.all().count()
-        pacientes_do_terapeuta_usuario_ids = Paciente.objects.all().values_list('usuario__id', flat=True) # Todos os usuários pacientes
+        pacientes_do_terapeuta_usuario_ids = Paciente.objects.all().values_list('usuario__id', flat=True) # Todos os utilizadores pacientes
     else:
         total_pacientes = 0
         pacientes_do_terapeuta_usuario_ids = []
@@ -691,7 +714,7 @@ def painel_terapeuta_api(request):
     alertas_urgentes = 0 # Placeholder, implementar lógica real de alertas
 
     pacientes_ativos_data = []
-    # Filtra pacientes ativos para o terapeuta logado ou todos se for superusuário
+    # Filtra pacientes ativos para o terapeuta logado ou todos se for superutilizador
     if user.tipo == 'terapeuta':
         pacientes_ativos_queryset = Paciente.objects.filter(terapeuta=user)
     elif user.is_superuser:
@@ -730,10 +753,10 @@ def painel_paciente_api(request):
     """
     API para obter dados do painel do paciente.
     Retorna os dados do paciente autenticado e as suas sessões.
-    Apenas pacientes e superusuários podem acessar.
+    Apenas pacientes e superutilizadores podem aceder.
     """
     user = request.user
-    if user.tipo != 'paciente' and not user.is_superuser: # Permite pacientes e superusuários
+    if user.tipo != 'paciente' and not user.is_superuser: # Permite pacientes e superutilizadores
         return Response({'detail': 'Acesso negado. Apenas pacientes e administradores podem aceder a este painel.'}, status=status.HTTP_403_FORBIDDEN)
 
     paciente_perfil = Paciente.objects.filter(usuario=user).first()
@@ -786,7 +809,7 @@ def historico_api(request):
 class NotificacaoViewSet(viewsets.ModelViewSet):
     """
     API para CRUD de notificações.
-    Permite que usuários (terapeutas e pacientes) visualizem e gerenciem suas notificações.
+    Permite que utilizadores (terapeutas e pacientes) visualizem e gerenciem as suas notificações.
     A criação de notificações será geralmente feita internamente pelo sistema.
     """
     serializer_class = NotificacaoSerializer
@@ -797,8 +820,8 @@ class NotificacaoViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """
-        Filtra notificações para o usuário autenticado.
-        Superusuários podem ver todas as notificações.
+        Filtra notificações para o utilizador autenticado.
+        Superutilizadores podem ver todas as notificações.
         """
         user = self.request.user
         if user.is_superuser:
@@ -808,35 +831,35 @@ class NotificacaoViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """
         A criação de notificações deve ser restrita e geralmente feita pelo sistema.
-        Para permitir a criação via API (apenas para superusuários, por exemplo),
+        Para permitir a criação via API (apenas para superutilizadores, por exemplo),
         você pode adicionar uma verificação aqui.
         """
         user = self.request.user
-        if not user.is_superuser: # Apenas superusuários podem criar notificações diretamente via API
+        if not user.is_superuser: # Apenas superutilizadores podem criar notificações diretamente via API
             raise PermissionDenied("Apenas administradores podem criar notificações diretamente via API.")
         
-        # Garante que a notificação é criada para o usuário especificado no serializer
-        # ou, se não especificado, para o superusuário que está criando.
-        # No entanto, para notificações geradas pelo sistema, o usuário seria definido programaticamente.
+        # Garante que a notificação é criada para o utilizador especificado no serializer
+        # ou, se não especificado, para o superutilizador que está criando.
+        # No entanto, para notificações geradas pelo sistema, o utilizador seria definido programaticamente.
         if 'usuario' not in serializer.validated_data and 'usuario_id' not in self.request.data:
-            serializer.validated_data['usuario'] = user # Define o superusuário como destinatário se não especificado
+            serializer.validated_data['usuario'] = user # Define o superutilizador como destinatário se não especificado
         
         serializer.save(data_criacao=timezone.now()) # Define a data de criação automaticamente
 
     def perform_update(self, serializer):
         """
-        Permite que o usuário marque suas próprias notificações como lidas.
+        Permite que o utilizador marque as suas próprias notificações como lidas.
         Outras alterações devem ser restritas.
         """
         instance = self.get_object()
         user = self.request.user
 
-        # Apenas o usuário que possui a notificação pode atualizá-la
-        # Superusuários também podem atualizar qualquer notificação
+        # Apenas o utilizador que possui a notificação pode atualizá-la
+        # Superutilizadores também podem atualizar qualquer notificação
         if instance.usuario != user and not user.is_superuser:
             raise PermissionDenied("Você não tem permissão para atualizar esta notificação.")
         
-        # Se o usuário não é superusuário, permite apenas a mudança do campo 'lida'
+        # Se o utilizador não é superutilizador, permite apenas a mudança do campo 'lida'
         # Se outros campos forem enviados, levanta um erro de permissão.
         if not user.is_superuser:
             if set(serializer.validated_data.keys()) - {'lida'}:
@@ -846,8 +869,8 @@ class NotificacaoViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         """
-        Permite que o usuário delete suas próprias notificações.
-        Superusuários também podem deletar qualquer notificação.
+        Permite que o utilizador delete as suas próprias notificações.
+        Superutilizadores também podem deletar qualquer notificação.
         """
         user = self.request.user
         if instance.usuario != user and not user.is_superuser:

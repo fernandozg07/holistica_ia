@@ -1,4 +1,3 @@
-# usuarios/models.py
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.core.validators import RegexValidator
@@ -11,8 +10,6 @@ class UsuarioManager(BaseUserManager):
         if not email:
             raise ValueError('O email é obrigatório')
         email = self.normalize_email(email)
-        # Use get_user_model().objects.create_user para evitar recursão
-        # Não, aqui é o manager, então self.model é o correto
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -73,11 +70,11 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
         return f"{self.email} ({self.get_tipo_display()})"
 
     def get_full_name(self):
-        """Retorna o nome completo do usuário."""
+        """Retorna o nome completo do utilizador."""
         return f"{self.first_name} {self.last_name}".strip()
 
     def get_short_name(self):
-        """Retorna o primeiro nome do usuário."""
+        """Retorna o primeiro nome do utilizador."""
         return self.first_name
 
     @property
@@ -94,19 +91,16 @@ class Paciente(models.Model):
     usuario = models.OneToOneField(
         Usuario,
         on_delete=models.CASCADE,
-        primary_key=True, # Mantemos primary_key=True aqui, mas o serializer precisará usar 'usuario_id' ou 'pk'
-        related_name='perfil_paciente', # Renomeei 'paciente' para 'perfil_paciente' para ser mais descritivo e evitar nome igual ao modelo.
+        primary_key=True, # Mantemos primary_key=True aqui
+        related_name='perfil_paciente', 
         limit_choices_to={'tipo': 'paciente'}
     )
-    # REMOVEMOS O CAMPO 'email' POIS JÁ ESTÁ NO USUARIO
+    # ✅ NOTA: Os campos 'telefone', 'data_nascimento', 'endereco', 'cep'
+    # já existem no modelo Usuario. Se a intenção é que esses dados sejam
+    # sempre os mesmos para o Usuario e o Paciente associado, eles são
+    # redundantes aqui. Você pode removê-los e acessá-los via 'paciente.usuario.telefone'
+    # no serializer ou template. Se eles podem ter valores diferentes, mantenha-os.
     nome_completo = models.CharField(max_length=255)
-    
-    # Manter os campos de contato aqui (telefone, data_nascimento, endereco, cep)
-    # se você quiser que o perfil do Paciente possa ter dados de contato diferentes
-    # dos dados gerais do Usuário associado.
-    # Se você SEMPRE quiser usar os dados do Usuario para o Paciente, você pode remover esses campos
-    # e usar source='usuario.telefone' no serializador.
-    # Por agora, vou mantê-los como estão no seu código original.
     telefone = models.CharField(max_length=20, blank=True, default='')
     data_nascimento = models.DateField(null=True, blank=True)
     endereco = models.CharField(max_length=255, blank=True, default='')
@@ -250,7 +244,7 @@ class Relatorio(models.Model):
 class Notificacao(models.Model):
     """
     Modelo para armazenar notificações do sistema.
-    Pode ser associado a um usuário específico.
+    Pode ser associado a um utilizador específico.
     """
     TIPO_CHOICES = [
         ('geral', 'Geral'),
@@ -260,12 +254,12 @@ class Notificacao(models.Model):
         ('sistema', 'Sistema'),
     ]
 
-    # O usuário que receberá a notificação
+    # O utilizador que receberá a notificação
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='notificacoes',
-        verbose_name='Usuário'
+        verbose_name='Utilizador'
     )
     
     # Tipo da notificação (para categorização e ícones no frontend)
@@ -287,7 +281,7 @@ class Notificacao(models.Model):
         verbose_name='Conteúdo'
     )
     
-    # URL opcional para onde a notificação deve levar o usuário
+    # URL opcional para onde a notificação deve levar o utilizador
     link = models.URLField(
         max_length=500,
         blank=True,
@@ -295,7 +289,7 @@ class Notificacao(models.Model):
         verbose_name='Link'
     )
     
-    # Se a notificação já foi lida pelo usuário
+    # Se a notificação já foi lida pelo utilizador
     lida = models.BooleanField(
         default=False,
         verbose_name='Lida'
@@ -314,4 +308,3 @@ class Notificacao(models.Model):
 
     def __str__(self):
         return f"[{self.get_tipo_display()}] {self.assunto} para {self.usuario.email}"
-

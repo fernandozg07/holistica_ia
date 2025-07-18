@@ -1,16 +1,16 @@
 from rest_framework import serializers
-from .models import Usuario, Paciente, Sessao, Mensagem, Relatorio, Notificacao # Importe Notificacao
+from .models import Usuario, Paciente, Sessao, Mensagem, Relatorio, Notificacao
 # Importar Conversa do app 'ia' para evitar conflitos e garantir que seja o modelo correto
-from ia.models import Conversa
+from ia.models import Conversa # Importação correta do modelo Conversa
 
 class UsuarioSerializer(serializers.ModelSerializer):
     """
     Serializer para o modelo Usuario.
     Inclui um campo de leitura 'idade' que é uma propriedade calculada no modelo.
-    Adiciona 'password' como campo de escrita para registro e atualização.
+    Adiciona 'password' como campo de escrita para registo e atualização.
     """
     idade = serializers.ReadOnlyField()  # Propriedade calculada no model
-    password = serializers.CharField(write_only=True, required=False, style={'input_type': 'password'}) # Adicionado para registro/atualização
+    password = serializers.CharField(write_only=True, required=False, style={'input_type': 'password'}) # Adicionado para registo/atualização
 
     class Meta:
         model = Usuario
@@ -24,7 +24,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'criado_em', 'atualizado_em', 'idade']
 
     def create(self, validated_data):
-        # Extrai a senha para hash
+        # Extrai a palavra-passe para hash
         password = validated_data.pop('password', None)
         user = Usuario.objects.create(**validated_data)
         if password is not None:
@@ -33,7 +33,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
         return user
 
     def update(self, instance, validated_data):
-        # Extrai a senha para hash durante a atualização
+        # Extrai a palavra-passe para hash durante a atualização
         password = validated_data.pop('password', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -52,7 +52,7 @@ class PacienteSerializer(serializers.ModelSerializer):
     idade = serializers.ReadOnlyField()
 
     # O campo 'terapeuta' é um objeto aninhado para leitura, contendo os detalhes do Terapeuta.
-    # Ele se refere ao modelo Usuario, que representa o terapeuta.
+    # Ele refere-se ao modelo Usuario, que representa o terapeuta.
     terapeuta = UsuarioSerializer(read_only=True)
 
     # 'terapeuta_id' é um campo de escrita que mapeia para a ForeignKey 'terapeuta' no modelo.
@@ -72,16 +72,16 @@ class PacienteSerializer(serializers.ModelSerializer):
     # O email do paciente agora vem do modelo Usuario associado
     email = serializers.ReadOnlyField(source='usuario.email')
 
-    # Adicionando nome_completo do usuário associado para ser usado no frontend para o campo de seleção
+    # Adicionando nome_completo do utilizador associado para ser usado no frontend para o campo de seleção
     usuario_nome_completo = serializers.ReadOnlyField(source='usuario.get_full_name')
-    usuario_id = serializers.ReadOnlyField(source='usuario.id') # ID do usuário associado ao paciente
+    usuario_id = serializers.ReadOnlyField(source='usuario.id') # ID do utilizador associado ao paciente
 
 
     class Meta:
         model = Paciente
         fields = [
-            'usuario', # Inclui os detalhes completos do usuário associado
-            'email', # O email agora é um ReadOnlyField que busca do usuário associado
+            'usuario', # Inclui os detalhes completos do utilizador associado
+            'email', # O email agora é um ReadOnlyField que busca do utilizador associado
             'usuario_nome_completo', # Adicionado para frontend
             'usuario_id',            # Adicionado para frontend
 
@@ -91,7 +91,7 @@ class PacienteSerializer(serializers.ModelSerializer):
             'criado_em', 'atualizado_em', 'idade',
             'terapeuta', 'terapeuta_id',
         ]
-        # 'usuario' é read-only porque é um OneToOneField e é gerenciado no perform_create da ViewSet.
+        # 'usuario' é read-only porque é um OneToOneField e é gerido no perform_create da ViewSet.
         # 'terapeuta' é read-only porque 'terapeuta_id' é usado para escrita.
         # O 'id' do Paciente é o mesmo que o 'id' do Usuario associado, então não o listamos separadamente
         # nos read_only_fields para evitar redundância com 'usuario'.
@@ -110,7 +110,7 @@ class SessaoSerializer(serializers.ModelSerializer):
 
     # 'terapeuta_id' e 'paciente_id' são campos de escrita para associar os IDs.
     # 'required=False' é usado aqui porque a lógica de obrigatoriedade e inferência
-    # é tratada no método `perform_create` da ViewSet, com base no tipo de usuário.
+    # é tratada no método `perform_create` da ViewSet, com base no tipo de utilizador.
     terapeuta_id = serializers.PrimaryKeyRelatedField(
         queryset=Usuario.objects.filter(tipo='terapeuta'),
         source='terapeuta',
@@ -173,22 +173,17 @@ class MensagemSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'data_envio', 'lida', 'remetente', 'destinatario', 'remetente_nome', 'destinatario_nome']
 
     def create(self, validated_data):
-        # O remetente é o usuário autenticado, passado via contexto da requisição
+        # O remetente é o utilizador autenticado, passado via contexto da requisição
         remetente = self.context['request'].user
         validated_data['remetente'] = remetente
 
-        # Pop o destinatario_id antes de passar para o super().create
-        # Este campo já foi processado pelo 'source='destinatario'' se foi enviado
-        # Caso contrário, será None.
-        destinatario = validated_data.get('destinatario') # Pega o objeto Usuario se foi mapeado via destinatario_id
+        # Pega o objeto Usuario se foi mapeado via destinatario_id
+        destinatario = validated_data.get('destinatario') 
 
         if remetente.tipo == 'terapeuta':
             if not destinatario: # Se o terapeuta não forneceu um destinatario_id válido
                 raise serializers.ValidationError({"destinatario_id": "O ID do destinatário é obrigatório para terapeutas."})
-            # Validação: Terapeuta só pode enviar para seus pacientes
-            # Note: Para esta validação ser mais robusta, você precisaria do Paciente model aqui,
-            # ou verificar se o 'destinatario' é do tipo 'paciente'.
-            # A validação mais precisa (se o paciente pertence ao terapeuta) é melhor na view.
+            # Validação: Terapeuta só pode enviar para os seus pacientes
             if not Paciente.objects.filter(usuario=destinatario, terapeuta=remetente).exists():
                 raise serializers.ValidationError({"destinatario_id": "Não tem permissão para enviar mensagens para este paciente."})
 
@@ -196,7 +191,7 @@ class MensagemSerializer(serializers.ModelSerializer):
             try:
                 paciente_perfil = Paciente.objects.get(usuario=remetente)
             except Paciente.DoesNotExist:
-                raise serializers.ValidationError({"detail": "Perfil de paciente não encontrado para o usuário logado."})
+                raise serializers.ValidationError({"detail": "Perfil de paciente não encontrado para o utilizador logado."})
             
             if not paciente_perfil.terapeuta:
                 raise serializers.ValidationError({"detail": "Você precisa ter um terapeuta principal associado para enviar mensagens."})
@@ -206,12 +201,11 @@ class MensagemSerializer(serializers.ModelSerializer):
             
             # Se por acaso o paciente enviou um 'destinatario_id' no payload,
             # precisamos garantir que ele seja o terapeuta correto.
-            # Se 'destinatario' (o objeto do PrimaryKeyRelatedField) não for None e for diferente do terapeuta principal.
             if destinatario and destinatario != paciente_perfil.terapeuta:
                 raise serializers.ValidationError({"destinatario_id": "Pacientes só podem enviar mensagens para o seu terapeuta associado."})
 
         else:
-            raise serializers.ValidationError({"detail": "Tipo de usuário não autorizado a enviar mensagens."})
+            raise serializers.ValidationError({"detail": "Tipo de utilizador não autorizado a enviar mensagens."})
 
         # Chama o método create original do ModelSerializer.
         # Agora 'remetente' e 'destinatario' já estão em validated_data.
@@ -290,13 +284,13 @@ class RelatorioSerializer(serializers.ModelSerializer):
 class NotificacaoSerializer(serializers.ModelSerializer):
     """
     Serializer para o modelo Notificacao.
-    Inclui o usuário associado para leitura.
+    Inclui o utilizador associado para leitura.
     """
-    usuario = UsuarioSerializer(read_only=True) # Para mostrar os detalhes do usuário
+    usuario = UsuarioSerializer(read_only=True) # Para mostrar os detalhes do utilizador
 
     class Meta:
         model = Notificacao
         fields = [
             'id', 'usuario', 'tipo', 'assunto', 'conteudo', 'link', 'lida', 'data_criacao'
         ]
-        read_only_fields = ['id', 'usuario', 'data_criacao'] # O usuário e a data são definidos no backend
+        read_only_fields = ['id', 'usuario', 'data_criacao'] # O utilizador e a data são definidos no backend
