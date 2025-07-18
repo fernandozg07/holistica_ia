@@ -5,6 +5,9 @@ import dj_database_url
 import sys
 import logging
 
+# Adiciona um print simples para verificar se o settings.py está sendo carregado
+print("DEBUG: settings.py está sendo carregado no Render!")
+
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -44,14 +47,14 @@ INSTALLED_APPS = [
 
     'crispy_forms',
     'crispy_bootstrap5',
-    'corsheaders',  # ✅
+    'corsheaders',
     'rest_framework',
     'whitenoise.runserver_nostatic',
 ]
 
 MIDDLEWARE = [
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # ✅
-    'corsheaders.middleware.CorsMiddleware',       # ✅
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -121,15 +124,17 @@ LOGOUT_REDIRECT_URL = '/'
 # 🔐 Cookies de sessão seguros
 SESSION_COOKIE_AGE = 1209600
 SESSION_SAVE_EVERY_REQUEST = True
-SESSION_COOKIE_SECURE = True  # ✅ obrigatório para SameSite=None
+SESSION_COOKIE_SECURE = not DEBUG   # True em produção HTTPS, False em desenvolvimento HTTP
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'None'  # ✅
+# ✅ ESSA É A LINHA CORRIGIDA: 'None' em produção, 'Lax' em desenvolvimento
+SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 
 # 🔐 Cookies de CSRF seguros
-CSRF_COOKIE_SECURE = True  # ✅
+CSRF_COOKIE_SECURE = not DEBUG    # True em produção HTTPS, False em desenvolvimento HTTP
 CSRF_USE_SESSIONS = False
 CSRF_COOKIE_HTTPONLY = False
-CSRF_COOKIE_SAMESITE = 'None'  # ✅
+# ✅ ESSA É A LINHA CORRIGIDA: 'None' em produção, 'Lax' em desenvolvimento
+CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 
 # 🔐 CORS + CSRF
 _CSRF_TRUSTED_ORIGINS_DEFAULT = (
@@ -144,10 +149,10 @@ CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', _CSRF_TRUSTED_ORIGINS_D
 
 CORS_ALLOWED_ORIGINS = os.getenv(
     'CORS_ALLOWED_ORIGINS',
-    'https://mindcareia.netlify.app,http://localhost:3000'
-).split(',')
+    'https://mindcareia.netlify.app,https://holistica-ia-backend.onrender.com,http://localhost:3000,http://127.0.0.1:3000'
+).split(',') # Adicionei o domínio do Render aqui para o CORS_ALLOWED_ORIGINS padrão
 
-CORS_ALLOW_CREDENTIALS = True  # ✅
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
@@ -156,7 +161,7 @@ CORS_ALLOW_HEADERS = [
     'dnt',
     'origin',
     'user-agent',
-    'x-csrftoken',  # ✅ essencial
+    'x-csrftoken',
     'x-requested-with',
 ]
 
@@ -186,6 +191,7 @@ AUTHENTICATION_BACKENDS = [
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 
 if not DEBUG:
+    # Estas linhas de log só serão ativadas se DEBUG for False (ou seja, em produção)
     logger.info(f"DEBUG (final): {DEBUG}")
     logger.info(f"ALLOWED_HOSTS (final): {ALLOWED_HOSTS}")
     logger.info(f"CORS_ALLOWED_ORIGINS (final): {CORS_ALLOWED_ORIGINS}")
