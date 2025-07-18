@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+
+# Django
+*.log
+*.pot
+*.mo
+db.sqlite3
+media/ # Pasta para uploads de arquivos de mídia (geralmente grande e específica do ambiente)
+staticfiles/ # Pasta onde o Django coleta arquivos estáticos para produção (gerada automaticamente)
+
+# Variáveis de ambiente
+.env
+
+# IDEs e editores (opcional, mas recomendado)
+.vscode/
+.idea/
+
+# Outros
+*.DS_Store # Arquivos do macOS
+Thumbs.db # Arquivos do Windows
