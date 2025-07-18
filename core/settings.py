@@ -47,15 +47,15 @@ INSTALLED_APPS = [
 
     'crispy_forms',
     'crispy_bootstrap5',
-    'corsheaders',
+    'corsheaders', # ✅ corsheaders DEVE vir antes de qualquer middleware que possa gerar respostas (ex: CommonMiddleware)
     'rest_framework',
     'whitenoise.runserver_nostatic',
 ]
 
 MIDDLEWARE = [
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'corsheaders.middleware.CorsMiddleware', # ✅ Mantenha CorsMiddleware o mais alto possível
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -130,7 +130,7 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 
 # 🔐 Cookies de CSRF seguros
-CSRF_COOKIE_SECURE = not DEBUG    # True em produção HTTPS, False em desenvolvimento HTTP
+CSRF_COOKIE_SECURE = not DEBUG     # True em produção HTTPS, False em desenvolvimento HTTP
 CSRF_USE_SESSIONS = False
 CSRF_COOKIE_HTTPONLY = False
 # ✅ ESSA É A LINHA CORRIGIDA: 'None' em produção, 'Lax' em desenvolvimento
@@ -138,19 +138,29 @@ CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 
 # 🔐 CORS + CSRF
 _CSRF_TRUSTED_ORIGINS_DEFAULT = (
-    'http://localhost:3000,http://127.0.0.1:3000,'
-    'http://localhost:8000,http://127.0.0.1:8000,'
-    'https://mindcareia.netlify.app'
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'https://mindcareia.netlify.app',
 )
 if RENDER_EXTERNAL_HOSTNAME:
-    _CSRF_TRUSTED_ORIGINS_DEFAULT += f",https://{RENDER_EXTERNAL_HOSTNAME}"
+    _CSRF_TRUSTED_ORIGINS_DEFAULT += (f"https://{RENDER_EXTERNAL_HOSTNAME}",) # Adiciona como tupla
 
-CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', _CSRF_TRUSTED_ORIGINS_DEFAULT).split(',')
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', ','.join(_CSRF_TRUSTED_ORIGINS_DEFAULT)).split(',')
 
-CORS_ALLOWED_ORIGINS = os.getenv(
-    'CORS_ALLOWED_ORIGINS',
-    'https://mindcareia.netlify.app,https://holistica-ia-backend.onrender.com,http://localhost:3000,http://127.0.0.1:3000'
-).split(',') # Adicionei o domínio do Render aqui para o CORS_ALLOWED_ORIGINS padrão
+_CORS_ALLOWED_ORIGINS_DEFAULT = (
+    'https://mindcareia.netlify.app',
+    'https://holistica-ia-backend.onrender.com', # ✅ Garanta que o domínio do Render está aqui
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+)
+# ✅ No Render, o domínio do backend é holistica-ia-backend.onrender.com
+# Se o RENDER_EXTERNAL_HOSTNAME for diferente, adicione-o também.
+if RENDER_EXTERNAL_HOSTNAME and f"https://{RENDER_EXTERNAL_HOSTNAME}" not in _CORS_ALLOWED_ORIGINS_DEFAULT:
+    _CORS_ALLOWED_ORIGINS_DEFAULT += (f"https://{RENDER_EXTERNAL_HOSTNAME}",)
+
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', ','.join(_CORS_ALLOWED_ORIGINS_DEFAULT)).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
