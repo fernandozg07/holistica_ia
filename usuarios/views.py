@@ -38,7 +38,7 @@ User = get_user_model()
 @permission_classes([AllowAny])
 def csrf_token_view(request):
     """
-    Retorna o CSRF token no corpo da resposta para que o frontend possa acedê-lo.
+    Retorna o CSRF token no corpo da resposta para que o frontend possa acessá-lo.
     O token também é definido como um cookie pelo Django.
     """
     token = get_token(request)
@@ -73,24 +73,15 @@ def register_api(request):
     Endpoint de registo para o frontend React.
     Cria um novo utilizador e, se for paciente, cria também o perfil de paciente.
     """
-    # É importante que o serializer de Usuario possa lidar com a criação de um novo usuário
-    # com o tipo 'paciente' e que o campo 'nome_completo' seja passado para o Paciente.
-    # O frontend deve enviar 'first_name', 'last_name', 'email', 'password', 'username'.
-    # O tipo 'paciente' é definido no frontend.
     serializer = UsuarioSerializer(data=request.data)
     if serializer.is_valid():
-        # A palavra-passe é tratada dentro do UsuarioSerializer.create()
         user = serializer.save()
 
         if user.tipo == 'paciente':
-            # Cria o perfil de Paciente. O nome_completo deve vir do frontend ou ser construído.
-            # Se o frontend envia 'first_name' e 'last_name', podemos usá-los.
             nome_completo_paciente = request.data.get('first_name', '') + ' ' + request.data.get('last_name', '')
             Paciente.objects.create(
                 usuario=user,
                 nome_completo=nome_completo_paciente.strip(),
-                # Outros campos do Paciente podem ser preenchidos aqui se vierem do frontend
-                # ou deixados em branco para serem preenchidos depois.
             )
         return Response(UsuarioSerializer(user).data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -158,7 +149,6 @@ class PacienteViewSet(viewsets.ModelViewSet):
         email_data = self.request.data.get('email')
         nome_completo_data = self.request.data.get('nome_completo')
         data_nascimento_data = self.request.data.get('data_nascimento')
-        # Campos adicionais do Paciente que podem vir do frontend
         telefone_data = self.request.data.get('telefone', '')
         endereco_data = self.request.data.get('endereco', '')
         cep_data = self.request.data.get('cep', '')
@@ -182,27 +172,18 @@ class PacienteViewSet(viewsets.ModelViewSet):
 
         try:
             usuario_paciente = Usuario.objects.get(email=email_data)
-            # Usuário com este email já existe
-
+            
             if usuario_paciente.tipo != 'paciente':
-                # Se o usuário existente NÃO é um paciente, não podemos convertê-lo diretamente
                 raise ValidationError({"email": "Já existe um utilizador com este email que não é um paciente. Por favor, utilize um email diferente."})
 
-            # Se o usuário existente É um paciente, verificar se já tem um perfil Paciente
             existing_paciente_profile = Paciente.objects.filter(usuario=usuario_paciente).first()
 
             if existing_paciente_profile:
-                # Já existe um perfil Paciente para este usuário
                 if existing_paciente_profile.terapeuta == user:
                     raise ValidationError({"email": "Este utilizador já é seu paciente."})
                 elif existing_paciente_profile.terapeuta and not user.is_superuser:
                     raise ValidationError({"email": "Este utilizador já é paciente de outro terapeuta."})
-                # Se for superusuário, pode associar mesmo que já tenha terapeuta.
-                # Se não tem terapeuta, o terapeuta logado pode "reclamá-lo".
-                # Não precisamos de um 'else' aqui, pois o fluxo continuará para atribuição do terapeuta.
             else:
-                # O Usuario existe e é 'paciente', mas não tem perfil Paciente. Criar um.
-                # Isso pode acontecer se um Usuario 'paciente' foi criado sem um perfil Paciente associado.
                 existing_paciente_profile = Paciente.objects.create(
                     usuario=usuario_paciente,
                     nome_completo=nome_completo_data,
@@ -210,15 +191,13 @@ class PacienteViewSet(viewsets.ModelViewSet):
                     data_nascimento=data_nascimento_data,
                     endereco=endereco_data,
                     cep=cep_data,
-                    terapeuta=None # Será definido abaixo
+                    terapeuta=None
                 )
 
         except Usuario.DoesNotExist:
-            # Usuário com este email NÃO existe. Criar um novo Usuario (como paciente).
-            # Gerar um username único se o email for muito longo ou se houver chance de colisão
-            username_to_use = email_data.split('@')[0] # Usa parte do email
+            username_to_use = email_data.split('@')[0]
             if Usuario.objects.filter(username=username_to_use).exists():
-                username_to_use = f"{username_to_use}_{uuid.uuid4().hex[:8]}" # Garante unicidade
+                username_to_use = f"{username_to_use}_{uuid.uuid4().hex[:8]}"
 
             usuario_paciente = Usuario.objects.create_user(
                 email=email_data,
@@ -227,48 +206,35 @@ class PacienteViewSet(viewsets.ModelViewSet):
                 last_name=last_name,
                 tipo='paciente',
                 is_active=True,
-                password=User.objects.make_random_password(), # Gera uma palavra-passe aleatória
-                data_nascimento=data_nascimento_data # Passa a data de nascimento
+                password=User.objects.make_random_password(),
+                data_nascimento=data_nascimento_data
             )
 
-        # Definir o terapeuta para o paciente
         terapeuta_para_paciente = None
         if user.tipo == 'terapeuta':
             terapeuta_para_paciente = user
         elif user.is_superuser:
-            # Superusuários podem especificar um terapeuta_id no payload.
-            # Se não for especificado, o superusuário pode ser o terapeuta padrão,
-            # ou o paciente pode ficar sem terapeuta atribuído.
             terapeuta_id_from_payload = serializer.validated_data.get('terapeuta')
             if terapeuta_id_from_payload:
                 terapeuta_para_paciente = terapeuta_id_from_payload
             else:
-                # Se superuser não especificar, e o paciente não tinha terapeuta, ele permanece sem.
-                # Se o paciente já tinha um terapeuta (e superuser não especificou um novo), mantém o antigo.
                 if existing_paciente_profile and existing_paciente_profile.terapeuta:
                     terapeuta_para_paciente = existing_paciente_profile.terapeuta
 
 
         if existing_paciente_profile:
-            # Se já existia um perfil Paciente (seja com ou sem terapeuta), atualizá-lo
             existing_paciente_profile.terapeuta = terapeuta_para_paciente
-            existing_paciente_profile.nome_completo = nome_completo_data # Atualiza nome
-            existing_paciente_profile.telefone = telefone_data # Atualiza telefone
-            existing_paciente_profile.data_nascimento = data_nascimento_data # Atualiza data
-            existing_paciente_profile.endereco = endereco_data # Atualiza endereço
-            existing_paciente_profile.cep = cep_data # Atualiza CEP
+            existing_paciente_profile.nome_completo = nome_completo_data
+            existing_paciente_profile.telefone = telefone_data
+            existing_paciente_profile.data_nascimento = data_nascimento_data
+            existing_paciente_profile.endereco = endereco_data
+            existing_paciente_profile.cep = cep_data
             existing_paciente_profile.save()
-            # O serializer precisa ser atualizado com a instância que foi modificada
             serializer.instance = existing_paciente_profile
         else:
-            # Se um novo perfil Paciente foi criado (porque o Usuario era novo ou Usuario 'paciente' sem perfil Paciente)
             serializer.save(terapeuta=terapeuta_para_paciente, usuario=usuario_paciente)
 
     def perform_update(self, serializer):
-        """
-        Permite atualizar apenas se o utilizador logado for o terapeuta do paciente,
-        o próprio paciente a atualizar o seu perfil, ou um superutilizador.
-        """
         user = self.request.user
         instance = self.get_object()
 
@@ -285,10 +251,6 @@ class PacienteViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     def perform_destroy(self, instance):
-        """
-        Permite a exclusão de um paciente apenas pelo terapeuta associado ou por um superutilizador.
-        Pacientes não podem excluir o seu próprio perfil Paciente.
-        """
         user = self.request.user
         
         is_therapist_of_patient = user.tipo == 'terapeuta' and instance.terapeuta == user
@@ -301,11 +263,6 @@ class PacienteViewSet(viewsets.ModelViewSet):
 
 
 class SessaoViewSet(viewsets.ModelViewSet):
-    """
-    API para CRUD de sessões.
-    Terapeutas gerenciam as suas sessões.
-    Pacientes podem ver e deletar as suas próprias sessões.
-    """
     serializer_class = SessaoSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [filters.OrderingFilter]
@@ -313,9 +270,6 @@ class SessaoViewSet(viewsets.ModelViewSet):
     ordering = ['-data']
 
     def get_queryset(self):
-        """
-        Filtra sessões com base no tipo de utilizador autenticado.
-        """
         user = self.request.user
         if user.tipo == 'terapeuta':
             return Sessao.objects.filter(terapeuta=user)
@@ -329,10 +283,6 @@ class SessaoViewSet(viewsets.ModelViewSet):
         return Sessao.objects.none()
 
     def perform_create(self, serializer):
-        """
-        Associa o terapeuta ou paciente autenticado à sessão.
-        Cria notificações para o terapeuta e o paciente.
-        """
         user = self.request.user
         session_instance = None
 
@@ -378,9 +328,7 @@ class SessaoViewSet(viewsets.ModelViewSet):
             else:
                 raise PermissionDenied("Acesso negado. Apenas terapeutas, pacientes e superutilizadores podem criar sessões.")
 
-            # --- Lógica de Notificação para Sessão Criada ---
             if session_instance:
-                # Notificação para o Paciente
                 Notificacao.objects.create(
                     usuario=session_instance.paciente.usuario,
                     tipo='sessao',
@@ -390,9 +338,7 @@ class SessaoViewSet(viewsets.ModelViewSet):
                     lida=False,
                     data_criacao=timezone.now()
                 )
-                print(f"Notificação de sessão criada para o paciente: {session_instance.paciente.usuario.username}")
 
-                # Notificação para o Terapeuta
                 Notificacao.objects.create(
                     usuario=session_instance.terapeuta,
                     tipo='sessao',
@@ -402,7 +348,6 @@ class SessaoViewSet(viewsets.ModelViewSet):
                     lida=False,
                     data_criacao=timezone.now()
                 )
-                print(f"Notificação de sessão criada para o terapeuta: {session_instance.terapeuta.username}")
 
         except Exception as e:
             print(f"ERRO ao criar sessão ou notificação de sessão: {e}")
@@ -437,9 +382,7 @@ class SessaoViewSet(viewsets.ModelViewSet):
                     lida=False,
                     data_criacao=timezone.now()
                 )
-                print(f"Notificação de sessão atualizada para o paciente: {session_instance.paciente.usuario.username}")
 
-                # Notificação para o Terapeuta
                 Notificacao.objects.create(
                     usuario=session_instance.terapeuta,
                     tipo='sessao',
@@ -449,17 +392,12 @@ class SessaoViewSet(viewsets.ModelViewSet):
                     lida=False,
                     data_criacao=timezone.now()
                 )
-                print(f"Notificação de sessão atualizada para o terapeuta: {session_instance.terapeuta.username}")
 
         except Exception as e:
             print(f"ERRO ao atualizar sessão ou notificação de sessão: {e}")
             raise
 
     def perform_destroy(self, instance):
-        """
-        Permite a exclusão de uma sessão pelo terapeuta responsável,
-        pelo paciente que agendou a sessão, ou por um superutilizador.
-        """
         user = self.request.user
 
         is_therapist_of_session = user.tipo == 'terapeuta' and instance.terapeuta == user
@@ -848,7 +786,7 @@ class NotificacaoViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ['data_criacao', 'lida']
-    ordering = ['-data_criacao'] # Notificações mais recentes primeiro
+    ordering = ['-data_criacao'] # Notificações mais recentes primeiro por padrão
 
     def get_queryset(self):
         """
@@ -895,7 +833,7 @@ class NotificacaoViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         """
         Permite que o utilizador delete as suas próprias notificações.
-        Superutilizadores também podem deletar qualquer notificação.
+        Superusuários também podem deletar qualquer notificação.
         """
         user = self.request.user
         if instance.usuario != user and not user.is_superuser:
