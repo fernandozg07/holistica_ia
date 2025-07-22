@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from .models import Usuario, Paciente, Sessao, Mensagem, Relatorio, Notificacao
-# Importar Conversa do app 'ia' para evitar conflitos e garantir que seja o modelo correto
 from ia.models import Conversa # Importação correta do modelo Conversa
 
 class UsuarioSerializer(serializers.ModelSerializer):
@@ -21,6 +20,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
             'criado_em', 'atualizado_em', 'idade', 'password' # Incluir 'password'
         ]
         # Campos que são apenas para leitura e não podem ser modificados via API
+        # 'password' é write_only, então não precisa estar em read_only_fields.
         read_only_fields = ['id', 'criado_em', 'atualizado_em', 'idade']
 
     def create(self, validated_data):
@@ -52,7 +52,7 @@ class PacienteSerializer(serializers.ModelSerializer):
     idade = serializers.ReadOnlyField()
 
     # O campo 'terapeuta' é um objeto aninhado para leitura, contendo os detalhes do Terapeuta.
-    # Ele refere-se ao modelo Usuario, que representa o terapeuta.
+    # Ele refere-se ao modelo Usuario, que representa o o terapeuta.
     terapeuta = UsuarioSerializer(read_only=True)
 
     # 'terapeuta_id' é um campo de escrita que mapeia para a ForeignKey 'terapeuta' no modelo.
@@ -80,6 +80,7 @@ class PacienteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Paciente
         fields = [
+            'id', # ✅ Adicionado 'id' aqui para ser incluído na serialização
             'usuario', # Inclui os detalhes completos do utilizador associado
             'email', # O email agora é um ReadOnlyField que busca do utilizador associado
             'usuario_nome_completo', # Adicionado para frontend
@@ -91,11 +92,12 @@ class PacienteSerializer(serializers.ModelSerializer):
             'criado_em', 'atualizado_em', 'idade',
             'terapeuta', 'terapeuta_id',
         ]
-        # 'usuario' é read-only porque é um OneToOneField e é gerido no perform_create da ViewSet.
-        # 'terapeuta' é read-only porque 'terapeuta_id' é usado para escrita.
-        # O 'id' do Paciente é o mesmo que o 'id' do Usuario associado, então não o listamos separadamente
-        # nos read_only_fields para evitar redundância com 'usuario'.
-        read_only_fields = ['criado_em', 'atualizado_em', 'idade', 'terapeuta', 'usuario', 'email', 'usuario_nome_completo', 'usuario_id']
+        # Campos que são apenas para leitura.
+        # 'id' é read-only por padrão para ModelSerializers, mas é bom listá-lo explicitamente.
+        read_only_fields = [
+            'id', 'criado_em', 'atualizado_em', 'idade', 'terapeuta', 'usuario',
+            'email', 'usuario_nome_completo', 'usuario_id'
+        ]
 
 
 class SessaoSerializer(serializers.ModelSerializer):
@@ -170,6 +172,7 @@ class MensagemSerializer(serializers.ModelSerializer):
             'remetente_nome', 'destinatario_nome' # Incluir no fields para leitura
         ]
         # Campos que são apenas para leitura (os que são definidos na view ou criados automaticamente)
+        # 'destinatario_id' é write_only, então não precisa estar em read_only_fields.
         read_only_fields = ['id', 'data_envio', 'lida', 'remetente', 'destinatario', 'remetente_nome', 'destinatario_nome']
 
     def create(self, validated_data):
@@ -243,6 +246,7 @@ class ConversaSerializer(serializers.ModelSerializer):
             'data_conversa'
         ]
         # Campos que são apenas para leitura.
+        # 'data_conversa' é auto_now_add, então é gerado automaticamente.
         read_only_fields = ['id', 'data_conversa', 'usuario']
 
 

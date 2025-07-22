@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.core.validators import RegexValidator
-from datetime import date
+from datetime import date, timedelta # ✅ Importado timedelta aqui
 from django.conf import settings
 from django.utils import timezone
 
@@ -182,7 +182,7 @@ class Sessao(models.Model):
 
     @property
     def duracao_timedelta(self):
-        from datetime import timedelta
+        # ✅ timedelta já importado no topo do arquivo
         return timedelta(minutes=self.duracao)
 
     def __str__(self):

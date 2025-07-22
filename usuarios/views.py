@@ -431,10 +431,6 @@ class MensagemViewSet(viewsets.ModelViewSet):
         return Mensagem.objects.filter(Q(remetente=user) | Q(destinatario=user)).distinct()
 
     def perform_create(self, serializer):
-        """
-        Permite que o serializer lide com a lógica de remetente e destinatário.
-        Após salvar a mensagem, cria uma notificação para o destinatário.
-        """
         print("Iniciando perform_create para Mensagem.")
         try:
             message_instance = serializer.save()
@@ -477,10 +473,6 @@ class MensagemViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     def perform_destroy(self, instance):
-        """
-        Permite a exclusão de uma mensagem apenas pelo remetente
-        ou por um superutilizador.
-        """
         user = self.request.user
         if instance.remetente != user and not user.is_superuser:
             raise PermissionDenied("Não tem permissão para deletar esta mensagem.")
@@ -501,10 +493,6 @@ class RelatorioViewSet(viewsets.ModelViewSet):
     search_fields = ['titulo', 'conteudo']
 
     def get_queryset(self):
-        """
-        Filtra relatórios com base no tipo de utilizador autenticado.
-        Superusuários podem ver todos os relatórios.
-        """
         user = self.request.user
         if user.tipo == 'terapeuta':
             return Relatorio.objects.filter(terapeuta=user)
@@ -518,10 +506,6 @@ class RelatorioViewSet(viewsets.ModelViewSet):
         return Relatorio.objects.none()
 
     def perform_create(self, serializer):
-        """
-        Associa o terapeuta autenticado e o paciente ao relatório recém-criado.
-        Apenas terapeutas e superutilizadores podem criar relatórios.
-        """
         user = self.request.user
         if user.tipo != 'terapeuta' and not user.is_superuser:
             raise PermissionDenied("Apenas terapeutas e superutilizadores podem criar relatórios.")
@@ -548,10 +532,6 @@ class RelatorioViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Não tem permissão para atualizar este relatório.")
 
     def perform_destroy(self, instance):
-        """
-        Permite a exclusão de um relatório apenas pelo terapeuta que o criou
-        ou por um superutilizador. Pacientes não podem deletar relatórios.
-        """
         user = self.request.user
         if (user.tipo == 'terapeuta' and instance.terapeuta == user) or user.is_superuser:
             instance.delete()
@@ -581,7 +561,7 @@ def buscar_pacientes_api(request):
     elif user.is_superuser:
         pacientes_queryset = Paciente.objects.all()
     else:
-        return Response({'detail': 'Acesso negado.'}, status=status.HTTP_403_FORBIDDEN)
+        pacientes_queryset = Paciente.objects.none()
 
     pacientes = pacientes_queryset.filter(
         nome_completo__icontains=termo
@@ -816,15 +796,29 @@ class NotificacaoViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         """
         Permite que o utilizador marque as suas próprias notificações como lidas.
+        Terapeutas podem marcar notificações dos seus pacientes como lidas.
         Outras alterações devem ser restritas.
         """
         instance = self.get_object()
         user = self.request.user
 
-        if instance.usuario != user and not user.is_superuser:
+        # Verifica se o usuário logado é o proprietário da notificação OU um superusuário
+        is_owner_or_superuser = (instance.usuario == user) or user.is_superuser
+
+        # Verifica se o usuário logado é um terapeuta e a notificação pertence a um de seus pacientes
+        is_therapist_of_patient_notification = False
+        if user.tipo == 'terapeuta':
+            # Verifica se o usuário da notificação é um paciente do terapeuta logado
+            if Paciente.objects.filter(usuario=instance.usuario, terapeuta=user).exists():
+                is_therapist_of_patient_notification = True
+
+        # Permissão para atualizar: ou é o dono/superuser, ou é terapeuta do paciente da notificação
+        if not (is_owner_or_superuser or is_therapist_of_patient_notification):
             raise PermissionDenied("Você não tem permissão para atualizar esta notificação.")
         
-        if not user.is_superuser:
+        # Se o usuário não é superusuário nem terapeuta do paciente, permite apenas a mudança do campo 'lida'
+        # Se outros campos forem enviados, levanta um erro de permissão.
+        if not user.is_superuser and not is_therapist_of_patient_notification:
             if set(serializer.validated_data.keys()) - {'lida'}:
                 raise PermissionDenied("Você só pode marcar notificações como lidas.")
 
