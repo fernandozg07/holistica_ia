@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.core.validators import RegexValidator
-from datetime import date, timedelta # ✅ Importado timedelta aqui
+from datetime import date, timedelta
 from django.conf import settings
 from django.utils import timezone
 
@@ -36,7 +36,9 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
     ]
 
     email = models.EmailField(unique=True)
-    username = models.CharField(max_length=150, unique=True, blank=True, null=True)
+    # username pode ser null/blank se você não o usar para login ou identificação única além do email.
+    # Se for para ser único, considere remover blank=True, null=True e garantir que um valor é sempre gerado.
+    username = models.CharField(max_length=150, unique=True, blank=True, null=True) 
     first_name = models.CharField('Nome', max_length=150, blank=True)
     last_name = models.CharField('Sobrenome', max_length=150, blank=True)
     tipo = models.CharField(max_length=10, choices=TIPO_CHOICES, default='paciente')
@@ -91,7 +93,7 @@ class Paciente(models.Model):
     usuario = models.OneToOneField(
         Usuario,
         on_delete=models.CASCADE,
-        primary_key=True, # Mantemos primary_key=True aqui
+        primary_key=True,
         related_name='perfil_paciente', 
         limit_choices_to={'tipo': 'paciente'}
     )
@@ -182,8 +184,9 @@ class Sessao(models.Model):
 
     @property
     def duracao_timedelta(self):
-        # ✅ timedelta já importado no topo do arquivo
-        return timedelta(minutes=self.duracao)
+        # ✅ CORREÇÃO: Se 'duracao' já é um DurationField, ele já é um objeto timedelta.
+        # Não é necessário converter de minutos novamente.
+        return self.duracao 
 
     def __str__(self):
         paciente_nome = self.paciente.nome_completo if self.paciente else "Paciente Desconhecido"

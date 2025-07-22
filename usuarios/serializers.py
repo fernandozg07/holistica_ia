@@ -47,6 +47,10 @@ class PacienteSerializer(serializers.ModelSerializer):
     Serializer para o modelo Paciente.
     Lida com a serialização e desserialização de perfis de pacientes.
     """
+    # O ID do paciente é o mesmo do ID do usuário associado (devido a primary_key=True no OneToOneField)
+    # Exponha-o explicitamente para clareza na API.
+    id = serializers.ReadOnlyField(source='usuario.id')
+
     # A propriedade 'idade' é calculada no modelo Paciente
     idade = serializers.ReadOnlyField()
 
@@ -79,8 +83,7 @@ class PacienteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Paciente
         fields = [
-            # ✅ REMOVIDO 'id' daqui. O ID do Paciente é o mesmo do Usuario associado (primary_key=True no OneToOneField)
-            # e é acessível via 'pk' da instância do Paciente ou 'usuario_id' no serializer.
+            'id', # Agora explicitamente incluído e mapeado para usuario.id
             'usuario', # Inclui os detalhes completos do utilizador associado
             'email', # O email agora é um ReadOnlyField que busca do utilizador associado
             'usuario_nome_completo', # Adicionado para frontend
@@ -93,6 +96,7 @@ class PacienteSerializer(serializers.ModelSerializer):
             'terapeuta', 'terapeuta_id',
         ]
         read_only_fields = [
+            'id', # Adicionado 'id' aqui também, pois é um campo de leitura
             'criado_em', 'atualizado_em', 'idade', 'terapeuta', 'usuario',
             'email', 'usuario_nome_completo', 'usuario_id'
         ]
@@ -118,7 +122,8 @@ class SessaoSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False
     )
-    duracao_timedelta = serializers.ReadOnlyField()
+    # ✅ CORREÇÃO: duracao_timedelta agora é apenas um ReadOnlyField que expõe a propriedade do modelo.
+    duracao_timedelta = serializers.ReadOnlyField() 
 
     class Meta:
         model = Sessao
@@ -164,7 +169,7 @@ class MensagemSerializer(serializers.ModelSerializer):
         remetente = self.context['request'].user
         validated_data['remetente'] = remetente
 
-        destinatario = validated_data.get('destinatario') 
+        destinatario = validated_data.get('destinatario')  
 
         if remetente.tipo == 'terapeuta':
             if not destinatario:

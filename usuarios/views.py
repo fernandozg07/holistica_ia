@@ -75,7 +75,7 @@ def register_api(request):
     if serializer.is_valid():
         user = serializer.save()
 
-        # ✅ MELHORIA: Cria o perfil de Paciente com nome completo do request.data
+        # MELHORIA: Cria o perfil de Paciente com nome completo do request.data
         if user.tipo == 'paciente':
             nome_completo_paciente = request.data.get('first_name', '') + ' ' + request.data.get('last_name', '')
             Paciente.objects.create(
@@ -345,7 +345,7 @@ class SessaoViewSet(viewsets.ModelViewSet):
                 paciente_obj = Paciente.objects.get(pk=paciente_id)
 
                 if paciente_obj.terapeuta != terapeuta_obj:
-                     raise ValidationError({"detail": "O paciente não está associado ao terapeuta fornecido."})
+                    raise ValidationError({"detail": "O paciente não está associado ao terapeuta fornecido."})
 
                 session_instance = serializer.save(terapeuta=terapeuta_obj, paciente=paciente_obj)
 
@@ -362,7 +362,7 @@ class SessaoViewSet(viewsets.ModelViewSet):
                     conteudo=f'A sua sessão com {session_instance.terapeuta.get_full_name()} foi agendada para {session_instance.data.strftime("%d/%m/%Y às %H:%M")}.',
                     link=f'/sessoes/{session_instance.id}/editar',
                     lida=False,
-                    data_criacao=timezone.now()
+                    # data_criacao=timezone.now() # REMOVIDO: O modelo Notificacao já define auto_now_add=True ou default=timezone.now
                 )
                 print(f"Notificação de sessão criada para o paciente: {session_instance.paciente.usuario.username}")
 
@@ -374,7 +374,7 @@ class SessaoViewSet(viewsets.ModelViewSet):
                     conteudo=f'Você agendou uma nova sessão com {session_instance.paciente.nome_completo} para {session_instance.data.strftime("%d/%m/%Y às %H:%M")}.',
                     link=f'/sessoes/{session_instance.id}/editar',
                     lida=False,
-                    data_criacao=timezone.now()
+                    # data_criacao=timezone.now() # REMOVIDO: O modelo Notificacao já define auto_now_add=True ou default=timezone.now
                 )
                 print(f"Notificação de sessão criada para o terapeuta: {session_instance.terapeuta.username}")
 
@@ -412,7 +412,7 @@ class SessaoViewSet(viewsets.ModelViewSet):
                     conteudo=f'A sua sessão com {session_instance.terapeuta.get_full_name()} em {session_instance.data.strftime("%d/%m/%Y às %H:%M")} foi {update_message}.',
                     link=f'/sessoes/{session_instance.id}/editar',
                     lida=False,
-                    data_criacao=timezone.now()
+                    # data_criacao=timezone.now() # REMOVIDO: O modelo Notificacao já define auto_now_add=True ou default=timezone.now
                 )
                 print(f"Notificação de sessão atualizada para o paciente: {session_instance.paciente.usuario.username}")
 
@@ -424,7 +424,7 @@ class SessaoViewSet(viewsets.ModelViewSet):
                     conteudo=f'A sessão com {session_instance.paciente.nome_completo} em {session_instance.data.strftime("%d/%m/%Y às %H:%M")} foi {update_message}.',
                     link=f'/sessoes/{session_instance.id}/editar',
                     lida=False,
-                    data_criacao=timezone.now()
+                    # data_criacao=timezone.now() # REMOVIDO: O modelo Notificacao já define auto_now_add=True ou default=timezone.now
                 )
                 print(f"Notificação de sessão atualizada para o terapeuta: {session_instance.terapeuta.username}")
 
@@ -488,7 +488,7 @@ class MensagemViewSet(viewsets.ModelViewSet):
                 conteudo=f'Você recebeu uma nova mensagem de {remetente_nome} com o assunto: "{message_instance.assunto}".',
                 link=f'/mensagens/{message_instance.id}',
                 lida=False,
-                data_criacao=timezone.now()
+                # data_criacao=timezone.now() # REMOVIDO: O modelo Notificacao já define auto_now_add=True ou default=timezone.now
             )
             print(f"Notificação criada com sucesso para o utilizador {destinatario_notificacao.username}. ID da notificação: {notificacao_instance.id}")
 
@@ -660,7 +660,6 @@ class PerfilAPIView(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
 # --- Views de Painel (APIs) ---
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -706,7 +705,7 @@ def painel_terapeuta_api(request):
     else:
         sessoes_pendentes = 0
 
-    alertas_urgentes = 0
+    alertas_urgentes = 0 # Esta lógica pode ser expandida com base nas suas necessidades
 
     pacientes_ativos_data = []
     if user.tipo == 'terapeuta':
@@ -832,10 +831,13 @@ class NotificacaoViewSet(viewsets.ModelViewSet):
         if not user.is_superuser: # Apenas superutilizadores podem criar notificações diretamente via API
             raise PermissionDenied("Apenas administradores podem criar notificações diretamente via API.")
         
+        # Se o usuário não for explicitamente fornecido no payload, use o usuário autenticado
         if 'usuario' not in serializer.validated_data and 'usuario_id' not in self.request.data:
             serializer.validated_data['usuario'] = user
         
-        serializer.save(data_criacao=timezone.now())
+        # O campo data_criacao é auto_now_add=True ou default=timezone.now no modelo,
+        # então não precisamos passá-lo explicitamente aqui.
+        serializer.save()
 
     def perform_update(self, serializer):
         """
