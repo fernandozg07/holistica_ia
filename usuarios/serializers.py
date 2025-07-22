@@ -80,7 +80,8 @@ class PacienteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Paciente
         fields = [
-            'id', # ✅ Adicionado 'id' aqui para ser incluído na serialização
+            # Removido 'id' daqui, pois não é um campo válido para o modelo Paciente
+            # O ID do paciente é o mesmo do usuario associado, acessível via 'usuario_id' ou 'pk'
             'usuario', # Inclui os detalhes completos do utilizador associado
             'email', # O email agora é um ReadOnlyField que busca do utilizador associado
             'usuario_nome_completo', # Adicionado para frontend
@@ -93,9 +94,10 @@ class PacienteSerializer(serializers.ModelSerializer):
             'terapeuta', 'terapeuta_id',
         ]
         # Campos que são apenas para leitura.
-        # 'id' é read-only por padrão para ModelSerializers, mas é bom listá-lo explicitamente.
+        # 'usuario' é read-only porque é um OneToOneField e é gerido no perform_create da ViewSet.
+        # 'terapeuta' é read-only porque 'terapeuta_id' é usado para escrita.
         read_only_fields = [
-            'id', 'criado_em', 'atualizado_em', 'idade', 'terapeuta', 'usuario',
+            'criado_em', 'atualizado_em', 'idade', 'terapeuta', 'usuario',
             'email', 'usuario_nome_completo', 'usuario_id'
         ]
 
