@@ -85,7 +85,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware', # Mantenha SecurityMiddleware no topo
     'whitenoise.middleware.WhiteNoiseMiddleware', # Adicionado para Whitenoise em produção - DEVE SER O SEGUNDO
-    'corsheaders.middleware.CorsMiddleware',      # Precisa vir antes de CommonMiddleware para CORS
+    'corsheaders.middleware.CorsMiddleware',        # Precisa vir antes de CommonMiddleware para CORS
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -171,16 +171,18 @@ LOGOUT_REDIRECT_URL = '/' # Redireciona para a raiz após logout
 
 SESSION_COOKIE_AGE = 1209600
 SESSION_SAVE_EVERY_REQUEST = True
-SESSION_COOKIE_SECURE = not DEBUG   # True em produção HTTPS, False em desenvolvimento HTTP
+# ✅ CRÍTICO PARA iOS/Safari: 'True' em produção (HTTPS), 'False' em desenvolvimento (HTTP)
+SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_HTTPONLY = True
-# ✅ ESSA É A LINHA CORRIGIDA: 'None' em produção, 'Lax' em desenvolvimento
+# ✅ CRÍTICO PARA iOS/Safari: 'None' em produção (cross-site), 'Lax' em desenvolvimento
 SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 
 # --- CSRF (Cross-Site Request Forgery) ---
-CSRF_COOKIE_SECURE = not DEBUG    # True em produção HTTPS, False em desenvolvimento HTTP
+# ✅ CRÍTICO PARA iOS/Safari: 'True' em produção (HTTPS), 'False' em desenvolvimento (HTTP)
+CSRF_COOKIE_SECURE = not DEBUG
 CSRF_USE_SESSIONS = False
 CSRF_COOKIE_HTTPONLY = False
-# ✅ ESSA É A LINHA CORRIGIDA: 'None' em produção, 'Lax' em desenvolvimento
+# ✅ CRÍTICO PARA iOS/Safari: 'None' em produção (cross-site), 'Lax' em desenvolvimento
 CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 
 # Adicione esta linha para informar ao Django que ele está atrás de um proxy SSL (como o Render)
@@ -202,7 +204,7 @@ CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', ','.join(_CSRF_TRUSTED_
 
 _CORS_ALLOWED_ORIGINS_DEFAULT = (
     'https://mindcareia.netlify.app',
-    'https://holistica-ia-backend.onrender.com', # ✅ Garanta que o domínio do Render está aqui
+    'https://holistica-ia-backend.onrender.com', # ✅ Garante que o domínio do Render está aqui
     'http://localhost:3000',
     'http://127.0.0.1:3000',
 )
@@ -213,6 +215,7 @@ if RENDER_EXTERNAL_HOSTNAME and f"https://{RENDER_EXTERNAL_HOSTNAME}" not in _CO
 
 CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', ','.join(_CORS_ALLOWED_ORIGINS_DEFAULT)).split(',')
 
+# ✅ ESSENCIAL: Permite que o frontend envie e receba cookies e credenciais
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
     'accept',
