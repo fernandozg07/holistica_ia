@@ -171,20 +171,15 @@ LOGOUT_REDIRECT_URL = '/' # Redireciona para a raiz após logout
 
 SESSION_COOKIE_AGE = 1209600
 SESSION_SAVE_EVERY_REQUEST = True
-# ✅ CRÍTICO PARA iOS/Safari: Sempre False para permitir cookies cross-site
-SESSION_COOKIE_SECURE = False
-SESSION_COOKIE_HTTPONLY = False
-# ✅ CRÍTICO PARA iOS/Safari: Sempre 'Lax' para compatibilidade
-SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 
 # --- CSRF (Cross-Site Request Forgery) ---
-# ✅ CRÍTICO PARA iOS/Safari: Sempre False para permitir cookies cross-site
-CSRF_COOKIE_SECURE = False
-# ✅ CRÍTICO PARA iOS/Safari: Usar cookies em vez de sessões
-CSRF_USE_SESSIONS = False
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_USE_SESSIONS = True
 CSRF_COOKIE_HTTPONLY = False
-# ✅ CRÍTICO PARA iOS/Safari: Sempre 'Lax' para compatibilidade
-CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 
 # Adicione esta linha para informar ao Django que ele está atrás de um proxy SSL (como o Render)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
