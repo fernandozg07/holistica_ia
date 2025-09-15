@@ -40,7 +40,7 @@ def csrf_token_view(request):
     O token também é definido como um cookie pelo Django.
     """
     token = get_token(request)
-    return JsonResponse({'csrftoken': token})
+    return JsonResponse({'csrfToken': token})
 
 
 @api_view(['POST'])
