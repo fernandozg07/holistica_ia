@@ -180,7 +180,10 @@ SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 # --- CSRF (Cross-Site Request Forgery) ---
 # ✅ CRÍTICO PARA iOS/Safari: 'True' em produção (HTTPS), 'False' em desenvolvimento (HTTP)
 CSRF_COOKIE_SECURE = not DEBUG
-CSRF_USE_SESSIONS = False
+# ➡️ ATENÇÃO: A alteração mais provável para corrigir o problema do iOS está aqui.
+# Ao definir CSRF_USE_SESSIONS para True, o Django armazena o token na sessão,
+# o que melhora a compatibilidade com navegadores como o Safari em requisições cross-site.
+CSRF_USE_SESSIONS = True
 CSRF_COOKIE_HTTPONLY = False
 # ✅ CRÍTICO PARA iOS/Safari: 'None' em produção (cross-site), 'Lax' em desenvolvimento
 CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
